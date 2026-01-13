@@ -19,6 +19,11 @@ public class BoundReference extends LeafExpression {
     }
 
     @Override
+    public String toString() {
+        return "input[" + ordinal + ", " + dataType.simpleString() + ", " + nullable + "]";
+    }
+
+    @Override
     public Object[] args() {
         return new Object[]{ordinal, dataType, nullable};
     }
@@ -37,4 +42,5 @@ public class BoundReference extends LeafExpression {
     public Object eval(InternalRow input) {
         return input.get(ordinal, dataType);
     }
+
 }

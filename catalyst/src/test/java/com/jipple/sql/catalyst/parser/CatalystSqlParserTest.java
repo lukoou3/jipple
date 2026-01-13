@@ -9,7 +9,7 @@ public class CatalystSqlParserTest {
         var parser = CatalystSqlParser.getInstance();
         var expr = parser.parseExpression("a");
         System.out.println(expr);
-        var exprs = parser.parseExpressions("a, b");
+        var exprs = parser.parseExpressions("a, substr(a, 1) b");
         System.out.println(exprs);
     }
 

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public abstract class TreeNode<BaseType extends TreeNode<BaseType>> implements Serializable {
     private Set<TreeNode<BaseType>> _containsChild;
@@ -73,6 +74,21 @@ public abstract class TreeNode<BaseType extends TreeNode<BaseType>> implements S
             arr[i] = f.apply(args[i]);
         }
         return arr;
+    }
+
+    /**
+     * Returns the name of this type of TreeNode.  Defaults to the class name.
+     * Note that we remove the "Exec" suffix for physical operators here.
+     */
+    public String nodeName() {
+        return getClass().getSimpleName().replaceAll("Exec$", "");
+    }
+
+    /**
+     * The arguments that should be included in the arg string.  Defaults to the `productIterator`.
+     */
+    protected Stream<Object> stringArgs() {
+        return Arrays.stream(args());
     }
 
     BaseType self() {

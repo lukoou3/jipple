@@ -6,6 +6,8 @@ public class DataTypes {
     public static final DataType LONG = LongType.INSTANCE;
     public static final DataType FLOAT = FloatType.INSTANCE;
     public static final DataType DOUBLE = DoubleType.INSTANCE;
+    public static final DataType BOOLEAN = BooleanType.INSTANCE;
+    public static final DataType NULL = NullType.INSTANCE;
 
     public static final AbstractDataType NUMERIC = new AbstractDataType() {
 

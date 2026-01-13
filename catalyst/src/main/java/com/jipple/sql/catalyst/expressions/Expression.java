@@ -5,9 +5,14 @@ import com.jipple.sql.catalyst.analysis.TypeCheckResult;
 import com.jipple.sql.catalyst.trees.TreeNode;
 import com.jipple.sql.types.AbstractDataType;
 import com.jipple.sql.types.DataType;
+import com.jipple.sql.types.LongType;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 public abstract class Expression extends TreeNode<Expression> {
     private Boolean _deterministic;
@@ -63,6 +68,45 @@ public abstract class Expression extends TreeNode<Expression> {
             }
         }
         return TypeCheckResult.typeCheckSuccess();
+    }
+
+    /**
+     * Returns a user-facing string representation of this expression's name.
+     * This should usually match the name of the function in SQL.
+     */
+    public String prettyName() {
+        return nodeName().toLowerCase();
+    }
+
+    protected Stream<Object> flatArguments() {
+        return stringArgs().flatMap(x -> {
+            if(x instanceof Collection c){
+                return c.stream();
+            } else if (x instanceof Optional o) {
+                return o.stream();
+            } else if (x instanceof Iterable iterable) {
+                return StreamSupport.stream(iterable.spliterator(), false);
+            } else {
+                return Stream.of(x);
+            }
+        });
+    }
+
+    protected String typeSuffix() {
+        if (resolved()) {
+            if (dataType() instanceof LongType) {
+                return "L";
+            } else {
+                return "";
+            }
+        } else {
+            return "";
+        }
+    }
+
+    @Override
+    public String toString() {
+        return prettyName() + flatArguments().map(String::valueOf).collect(Collectors.joining(", ", "(",  ")"));
     }
 
     /*public void open() {

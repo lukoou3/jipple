@@ -45,6 +45,11 @@ public class UnresolvedAttribute extends Attribute {
         return new Object[] { nameParts };
     }
 
+    @Override
+    public String toString() {
+        return "'" + name();
+    }
+
     public static UnresolvedAttribute quoted(String name) {
         return new UnresolvedAttribute(List.of(name));
     }
