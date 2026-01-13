@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.jipple.sql.catalyst.util.JippleParserUtils.withOrigin;
 import static com.jipple.sql.types.DataTypes.*;
 
 public class AstBuilder extends SqlBaseBaseVisitor<Object> {
@@ -28,35 +29,39 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
 
     @Override
     public Expression visitSingleExpression(SingleExpressionContext ctx) {
-        return visitNamedExpression(ctx.namedExpression());
+       return withOrigin(ctx, () -> visitNamedExpression(ctx.namedExpression()));
     }
 
     @Override
     public List<Expression> visitSingleExpressions(SingleExpressionsContext ctx) {
-        List<Expression> expressions = visitNamedExpressionSeq(ctx.namedExpressionSeq());
-        return expressions.stream().map(e -> {
-            if (e instanceof NamedExpression) {
-                return e;
-            } else {
-                return new UnresolvedAlias(e);
-            }
-        }).collect(Collectors.toList());
+        return withOrigin(ctx, () -> {
+            List<Expression> expressions = visitNamedExpressionSeq(ctx.namedExpressionSeq());
+            return expressions.stream().map(e -> {
+                if (e instanceof NamedExpression) {
+                    return e;
+                } else {
+                    return new UnresolvedAlias(e);
+                }
+            }).collect(Collectors.toList());
+        });
     }
 
     @Override
     public Expression visitNamedExpression(NamedExpressionContext ctx) {
-        Expression e = expression(ctx.expression());
-        if (e == null) {
-            System.out.println(ctx.expression().getText());
-            throw new RuntimeException("can not parse expression:" + ctx.expression().getText());
-        }
-        if (ctx.name != null) {
-            return new Alias(e, ctx.name.getText());
-        } else if (ctx.identifierList() != null) {
-            throw new UnsupportedOperationException("can not parse expression:" + ctx.getText());
-        } else {
-            return e;
-        }
+        return withOrigin(ctx, () -> {
+            Expression e = expression(ctx.expression());
+            if (e == null) {
+                System.out.println(ctx.expression().getText());
+                throw new RuntimeException("can not parse expression:" + ctx.expression().getText());
+            }
+            if (ctx.name != null) {
+                return new Alias(e, ctx.name.getText());
+            } else if (ctx.identifierList() != null) {
+                throw new UnsupportedOperationException("can not parse expression:" + ctx.getText());
+            } else {
+                return e;
+            }
+        });
     }
 
     @Override
@@ -83,7 +88,7 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     @Override
     public Expression visitColumnReference(ColumnReferenceContext ctx) {
-        return UnresolvedAttribute.quoted(ctx.getText()); //创建列引用
+        return withOrigin(ctx, () -> UnresolvedAttribute.quoted(ctx.getText())); //创建列引用
     }
 
 
@@ -95,14 +100,16 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     @Override
     public Expression visitFunctionCall(FunctionCallContext ctx) {
-        // Create the function call.
-        String name = ctx.functionName().getText();
-        List<Expression> arguments = ctx.argument.stream().map(this::expression).map(e ->
-                // Transform COUNT(*) into COUNT(1).
-                e
-        ).collect(Collectors.toList());
-        Optional<Expression> filter = Optional.ofNullable(ctx.where).map(this::expression);
-        return new UnresolvedFunction(getFunctionIdentifier(ctx.functionName()), arguments, false, filter);
+        return withOrigin(ctx, () -> {
+            // Create the function call.
+            String name = ctx.functionName().getText();
+            List<Expression> arguments = ctx.argument.stream().map(this::expression).map(e ->
+                    // Transform COUNT(*) into COUNT(1).
+                    e
+            ).collect(Collectors.toList());
+            Optional<Expression> filter = Optional.ofNullable(ctx.where).map(this::expression);
+            return new UnresolvedFunction(getFunctionIdentifier(ctx.functionName()), arguments, false, filter);
+        });
     }
 
     /**
@@ -121,7 +128,7 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     @Override
     public Object visitNullLiteral(NullLiteralContext ctx) {
-        return Literal.of(null);
+        return withOrigin(ctx, () -> Literal.of(null));
     }
 
     /**
@@ -129,11 +136,13 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     @Override
     public Object visitBooleanLiteral(BooleanLiteralContext ctx) {
-        if (Boolean.parseBoolean(ctx.getText())) {
-            return Literal.of(true);
-        } else {
-            return Literal.of(false);
-        }
+        return withOrigin(ctx, () -> {
+            if (Boolean.parseBoolean(ctx.getText())) {
+                return Literal.of(true);
+            } else {
+                return Literal.of(false);
+            }
+        });
     }
 
     /**
@@ -142,14 +151,16 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     @Override
     public Object visitIntegerLiteral(IntegerLiteralContext ctx) {
-        BigDecimal v = new BigDecimal(ctx.getText());
-        if (noArithmeticException(() -> v.intValueExact())) {
-            return Literal.of(v.intValue());
-        } else if (noArithmeticException(() -> v.longValueExact())) {
-            return Literal.of(v.longValue());
-        } else {
-            return Literal.of(v.doubleValue());
-        }
+        return withOrigin(ctx , () -> {
+            BigDecimal v = new BigDecimal(ctx.getText());
+            if (noArithmeticException(() -> v.intValueExact())) {
+                return Literal.of(v.intValue());
+            } else if (noArithmeticException(() -> v.longValueExact())) {
+                return Literal.of(v.longValue());
+            } else {
+                return Literal.of(v.doubleValue());
+            }
+        });
     }
 
     private boolean noArithmeticException(Runnable body) {
@@ -166,7 +177,9 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     @Override
     public Object visitDecimalLiteral(DecimalLiteralContext ctx) {
-        return numericLiteral(ctx, ctx.getText(), new BigDecimal(Double.MIN_VALUE), new BigDecimal(Double.MAX_VALUE), DOUBLE.simpleString(), Double::parseDouble);
+        return withOrigin(ctx, () ->
+            numericLiteral(ctx, ctx.getText(), new BigDecimal(Double.MIN_VALUE), new BigDecimal(Double.MAX_VALUE), DOUBLE.simpleString(), Double::parseDouble)
+        );
     }
 
     /** Create a numeric literal expression. */
@@ -174,11 +187,11 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
         try {
             BigDecimal rawBigDecimal = new BigDecimal(rawStrippedQualifier);
             if (rawBigDecimal.compareTo(minValue) < 0 || rawBigDecimal.compareTo(maxValue) > 0) {
-                throw new ParseException(String.format("Numeric literal %s does not fit in range [%s, %s] for type %s", rawStrippedQualifier, minValue, maxValue, typeName));
+                throw new ParseException(String.format("Numeric literal %s does not fit in range [%s, %s] for type %s", rawStrippedQualifier, minValue, maxValue, typeName), ctx);
             }
             return Literal.of(converter.apply(rawStrippedQualifier));
         } catch (NumberFormatException e) {
-            throw new ParseException(e.getMessage());
+            throw new ParseException(e.getMessage(), ctx);
         }
     }
 
@@ -187,9 +200,11 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     @Override
     public Object visitTinyIntLiteral(TinyIntLiteralContext ctx) {
-        String text = ctx.getText();
-        String rawStrippedQualifier = text.substring(0, text.length() - 1);
-        return numericLiteral(ctx, rawStrippedQualifier, new BigDecimal(Integer.MIN_VALUE), new BigDecimal(Integer.MAX_VALUE), INTEGER.simpleString(), Integer::parseInt);
+        return withOrigin(ctx, () -> {
+            String text = ctx.getText();
+            String rawStrippedQualifier = text.substring(0, text.length() - 1);
+            return numericLiteral(ctx, rawStrippedQualifier, new BigDecimal(Integer.MIN_VALUE), new BigDecimal(Integer.MAX_VALUE), INTEGER.simpleString(), Integer::parseInt);
+        });
     }
 
     /**
@@ -197,9 +212,11 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     @Override
     public Object visitSmallIntLiteral(SmallIntLiteralContext ctx) {
-        String text = ctx.getText();
-        String rawStrippedQualifier = text.substring(0, text.length() - 1);
-        return numericLiteral(ctx, rawStrippedQualifier, new BigDecimal(Integer.MIN_VALUE), new BigDecimal(Integer.MAX_VALUE), INTEGER.simpleString(), Integer::parseInt);
+        return withOrigin(ctx, () -> {
+            String text = ctx.getText();
+            String rawStrippedQualifier = text.substring(0, text.length() - 1);
+            return numericLiteral(ctx, rawStrippedQualifier, new BigDecimal(Integer.MIN_VALUE), new BigDecimal(Integer.MAX_VALUE), INTEGER.simpleString(), Integer::parseInt);
+        });
     }
 
     /**
@@ -207,9 +224,11 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     @Override
     public Object visitBigIntLiteral(BigIntLiteralContext ctx) {
-        String text = ctx.getText();
-        String rawStrippedQualifier = text.substring(0, text.length() - 1);
-        return numericLiteral(ctx, rawStrippedQualifier, new BigDecimal(Long.MIN_VALUE), new BigDecimal(Long.MAX_VALUE), LONG.simpleString(), Long::parseLong);
+        return withOrigin(ctx, () -> {
+            String text = ctx.getText();
+            String rawStrippedQualifier = text.substring(0, text.length() - 1);
+            return numericLiteral(ctx, rawStrippedQualifier, new BigDecimal(Long.MIN_VALUE), new BigDecimal(Long.MAX_VALUE), LONG.simpleString(), Long::parseLong);
+        });
     }
 
     /**
@@ -217,9 +236,11 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     @Override
     public Object visitFloatLiteral(FloatLiteralContext ctx) {
-        String text = ctx.getText();
-        String rawStrippedQualifier = text.substring(0, text.length() - 1);
-        return numericLiteral(ctx, rawStrippedQualifier, new BigDecimal(Float.MIN_VALUE), new BigDecimal(Float.MAX_VALUE), FLOAT.simpleString(), Float::parseFloat);
+        return withOrigin(ctx, () -> {
+            String text = ctx.getText();
+            String rawStrippedQualifier = text.substring(0, text.length() - 1);
+            return numericLiteral(ctx, rawStrippedQualifier, new BigDecimal(Float.MIN_VALUE), new BigDecimal(Float.MAX_VALUE), FLOAT.simpleString(), Float::parseFloat);
+        });
     }
 
     /**
@@ -227,9 +248,11 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     @Override
     public Object visitDoubleLiteral(DoubleLiteralContext ctx) {
-        String text = ctx.getText();
-        String rawStrippedQualifier = text.substring(0, text.length() - 1);
-        return numericLiteral(ctx, rawStrippedQualifier, new BigDecimal(Double.MIN_VALUE), new BigDecimal(Double.MAX_VALUE), DOUBLE.simpleString(), Double::parseDouble);
+        return withOrigin(ctx, () -> {
+            String text = ctx.getText();
+            String rawStrippedQualifier = text.substring(0, text.length() - 1);
+            return numericLiteral(ctx, rawStrippedQualifier, new BigDecimal(Double.MIN_VALUE), new BigDecimal(Double.MAX_VALUE), DOUBLE.simpleString(), Double::parseDouble);
+        });
     }
 
 }
