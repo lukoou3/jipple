@@ -1,5 +1,6 @@
 package com.jipple.sql.catalyst.expressions;
 
+import com.jipple.collection.Option;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
 import com.jipple.sql.types.AbstractDataType;
 
@@ -24,9 +25,9 @@ public abstract class BinaryOperator extends BinaryExpression {
     public abstract AbstractDataType inputType();
 
     @Override
-    public Optional<List<AbstractDataType>> expectsInputTypes() {
+    public Option<List<AbstractDataType>> expectsInputTypes() {
         AbstractDataType inputType = inputType();
-        return Optional.of(List.of(inputType, inputType));
+        return Option.some(List.of(inputType, inputType));
     }
 
     public abstract String symbol();

@@ -26,6 +26,11 @@ public class StructType extends DataType {
     }
 
     @Override
+    public int hashCode() {
+        return Arrays.hashCode(fields);
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (!super.equals(o)) {
             return false;

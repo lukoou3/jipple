@@ -1,5 +1,6 @@
 package com.jipple.sql.catalyst.expressions.string;
 
+import com.jipple.collection.Option;
 import com.jipple.sql.catalyst.expressions.BinaryExpression;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.types.AbstractDataType;
@@ -7,7 +8,6 @@ import com.jipple.sql.types.DataType;
 import com.jipple.unsafe.types.UTF8String;
 
 import java.util.List;
-import java.util.Optional;
 
 import static com.jipple.sql.types.DataTypes.*;
 
@@ -17,8 +17,8 @@ public class StringRepeat extends BinaryExpression {
     }
 
     @Override
-    public Optional<List<AbstractDataType>> expectsInputTypes() {
-        return Optional.of(List.of(STRING, INTEGER));
+    public Option<List<AbstractDataType>> expectsInputTypes() {
+        return Option.some(List.of(STRING, INTEGER));
     }
 
     @Override

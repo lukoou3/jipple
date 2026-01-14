@@ -48,6 +48,20 @@ public class DecimalType  extends FractionalType {
         return String.format("DecimalType(%d,%d)", precision, scale);
     }
 
+    @Override
+    public int hashCode() {
+        return precision * 31 + scale;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!super.equals(o)) {
+            return false;
+        }
+        DecimalType other = (DecimalType) o;
+        return precision == other.precision && scale == other.scale;
+    }
+
     static void checkNegativeScale(int scale) {
         if (scale < 0) {
             throw new IllegalArgumentException(String.format("Negative scale is not allowed: %d. ", scale));

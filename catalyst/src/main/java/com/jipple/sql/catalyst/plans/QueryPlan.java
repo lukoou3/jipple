@@ -1,11 +1,11 @@
 package com.jipple.sql.catalyst.plans;
 
+import com.jipple.collection.Option;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.trees.TreeNode;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 public abstract class QueryPlan<PlanType extends QueryPlan<PlanType>> extends TreeNode<PlanType> {
 
@@ -19,9 +19,9 @@ public abstract class QueryPlan<PlanType extends QueryPlan<PlanType>> extends Tr
         for (Object arg : args) {
             if (arg instanceof Expression expr) {
                 expressions.add(expr);
-            } else if (arg instanceof Optional optional) {
-                if (optional.isPresent()) {
-                    seqAddToExpressions(expressions, List.of(optional.get()));
+            } else if (arg instanceof Option option) {
+                if (option.isDefined()) {
+                    seqAddToExpressions(expressions, List.of(option.get()));
                 }
             } else if (arg instanceof Iterable iterable) {
                 seqAddToExpressions(expressions, iterable);

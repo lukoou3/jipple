@@ -1,5 +1,6 @@
 package com.jipple.sql.catalyst.expressions;
 
+import com.jipple.collection.Option;
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
 import com.jipple.sql.catalyst.trees.TreeNode;
@@ -9,7 +10,6 @@ import com.jipple.sql.types.LongType;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -35,8 +35,8 @@ public abstract class Expression extends TreeNode<Expression> {
         return false;
     }
 
-    public Optional<List<AbstractDataType>> expectsInputTypes() {
-        return Optional.empty();
+    public Option<List<AbstractDataType>> expectsInputTypes() {
+        return Option.none();
     }
 
     public abstract DataType dataType();
@@ -82,8 +82,8 @@ public abstract class Expression extends TreeNode<Expression> {
         return stringArgs().flatMap(x -> {
             if(x instanceof Collection c){
                 return c.stream();
-            } else if (x instanceof Optional o) {
-                return o.stream();
+            } else if (x instanceof Option o) {
+                return o.isDefined() ? Stream.of(o.get()): Stream.empty();
             } else if (x instanceof Iterable iterable) {
                 return StreamSupport.stream(iterable.spliterator(), false);
             } else {

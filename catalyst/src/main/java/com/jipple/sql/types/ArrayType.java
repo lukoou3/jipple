@@ -1,8 +1,10 @@
 package com.jipple.sql.types;
 
+import java.util.Objects;
+
 public class ArrayType extends DataType {
-    public DataType elementType;
-    public boolean containsNull;
+    public final DataType elementType;
+    public final boolean containsNull;
 
     public ArrayType(DataType elementType ) {
         this(elementType, true);
@@ -26,6 +28,11 @@ public class ArrayType extends DataType {
     @Override
     public String simpleString() {
         return String.format("array<%s>", elementType.simpleString());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(elementType, containsNull);
     }
 
     @Override

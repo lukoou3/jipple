@@ -1,5 +1,7 @@
 package com.jipple.sql.types;
 
+import java.util.stream.IntStream;
+
 import static org.apache.commons.lang3.Strings.CS;
 
 /**
@@ -31,8 +33,7 @@ public abstract class DataType extends AbstractDataType {
     }
 
     public boolean sameType(DataType other) {
-        // DataType.equalsIgnoreNullability(this, other)
-        return this.equals(other);
+        return DataType.equalsIgnoreNullability(this, other);
     }
 
     /**
@@ -51,6 +52,12 @@ public abstract class DataType extends AbstractDataType {
         return this;
     }
 
+
+    @Override
+    public int hashCode() {
+        return simpleString().hashCode();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -66,5 +73,24 @@ public abstract class DataType extends AbstractDataType {
     @Override
     public String toString() {
         return simpleString();
+    }
+
+   /*********static method*********/
+
+    /**
+     * Compares two types, ignoring nullability of ArrayType, MapType, StructType.
+     */
+    public static boolean equalsIgnoreNullability(DataType left, DataType right) {
+        if (left instanceof ArrayType l && right instanceof ArrayType r) {
+            return equalsIgnoreNullability(l.elementType, r.elementType);
+        } else if (left instanceof MapType l && right instanceof MapType r) {
+            return equalsIgnoreNullability(l.keyType, r.keyType) &&
+                    equalsIgnoreNullability(l.valueType, r.valueType);
+        } else if (left instanceof StructType l && right instanceof StructType r) {
+            return l.fields.length == r.fields.length && IntStream.range(0, l.fields.length)
+                    .allMatch(i -> l.fields[i].name.equals(r.fields[i].name) && equalsIgnoreNullability(l.fields[i].dataType, r.fields[i].dataType) );
+        } else {
+            return left.equals(right);
+        }
     }
 }

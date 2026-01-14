@@ -1,0 +1,72 @@
+package com.jipple.sql.catalyst.expressions.condition;
+
+import com.jipple.sql.catalyst.InternalRow;
+import com.jipple.sql.catalyst.analysis.TypeCheckResult;
+import com.jipple.sql.catalyst.expressions.Expression;
+import com.jipple.sql.types.DataType;
+
+import java.util.List;
+
+import static com.jipple.sql.types.DataTypes.BOOLEAN;
+
+public class If extends Expression {
+    public final Expression predicate;
+    public final Expression trueValue;
+    public final Expression falseValue;
+
+    public If(Expression predicate, Expression trueValue, Expression falseValue) {
+        this.predicate = predicate;
+        this.trueValue = trueValue;
+        this.falseValue = falseValue;
+    }
+
+    @Override
+    public Object[] args() {
+        return new Object[] { predicate, trueValue, falseValue };
+    }
+
+    @Override
+    public List<Expression> children() {
+        return List.of(predicate, trueValue, falseValue);
+    }
+
+    @Override
+    public boolean nullable() {
+        return trueValue.nullable() || falseValue.nullable();
+    }
+
+    @Override
+    public DataType dataType() {
+        return trueValue.dataType();
+    }
+
+    @Override
+    public TypeCheckResult checkInputDataTypes() {
+        if (!predicate.dataType().equals(BOOLEAN)) {
+            return TypeCheckResult.typeCheckFailure("type of predicate expression in If should be boolean");
+        } else if (!trueValue.dataType().equals(falseValue.dataType())) {
+            return TypeCheckResult.typeCheckFailure(String.format("differing types:%s and %s", trueValue.dataType(), falseValue.dataType()));
+        } else {
+            return TypeCheckResult.typeCheckSuccess();
+        }
+    }
+
+    @Override
+    public Object eval(InternalRow input) {
+        if (java.lang.Boolean.TRUE.equals(predicate.eval(input))) {
+            return trueValue.eval(input);
+        } else {
+            return falseValue.eval(input);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return String.format("if (%s) %s else %s", predicate, trueValue, falseValue);
+    }
+
+    @Override
+    protected Expression withNewChildrenInternal(List<Expression> newChildren) {
+        return new If(newChildren.get(0), newChildren.get(1), newChildren.get(2));
+    }
+}

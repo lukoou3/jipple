@@ -1,6 +1,7 @@
 package com.jipple.sql.types;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 public class StructField implements Serializable {
     public final String name;
@@ -9,6 +10,11 @@ public class StructField implements Serializable {
     public StructField(String name, DataType dataType) {
         this.name = name;
         this.dataType = dataType;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, dataType);
     }
 
     @Override
