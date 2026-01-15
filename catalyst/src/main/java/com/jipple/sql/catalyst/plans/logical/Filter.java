@@ -1,9 +1,11 @@
 package com.jipple.sql.catalyst.plans.logical;
 
-public class Filter extends UnaryNode {
-    public final Exception condition;
+import com.jipple.sql.catalyst.expressions.Expression;
 
-    public Filter(Exception condition, LogicalPlan child) {
+public class Filter extends UnaryNode {
+    public final Expression condition;
+
+    public Filter(Expression condition, LogicalPlan child) {
         super(child);
         this.condition = condition;
     }

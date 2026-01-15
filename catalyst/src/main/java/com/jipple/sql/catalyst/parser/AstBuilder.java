@@ -8,9 +8,7 @@ import com.jipple.sql.catalyst.expressions.nvl.*;
 import com.jipple.sql.catalyst.expressions.predicate.*;
 import com.jipple.sql.catalyst.expressions.regexp.*;
 import com.jipple.sql.catalyst.parser.SqlBaseParser.*;
-import com.jipple.sql.catalyst.plans.logical.LogicalPlan;
-import com.jipple.sql.catalyst.plans.logical.OneRowRelation;
-import com.jipple.sql.catalyst.plans.logical.Project;
+import com.jipple.sql.catalyst.plans.logical.*;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
@@ -90,7 +88,8 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
             visitFromClause(ctx.fromClause())
         );
 
-        LogicalPlan withFilter = relation;
+        // Add where.
+        LogicalPlan withFilter = relation.optionalMap(ctx.whereClause(), this::withWhereClause);
 
         List<Expression> expressions = visitNamedExpressionSeq(ctx.selectClause().namedExpressionSeq());
         // Add aggregation or a project.
@@ -119,6 +118,72 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
         });
     }
 
+    /**
+     * Create an aliased table reference. This is typically used in FROM clauses.
+     */
+    @Override
+    public LogicalPlan visitTableName(TableNameContext ctx) {
+        return withOrigin(ctx, () -> {
+            List<String> tableId = visitMultipartIdentifier(ctx.multipartIdentifier());
+            LogicalPlan table = mayApplyAliasPlan(ctx.tableAlias(), new UnresolvedRelation(tableId));
+            return table;
+        });
+    }
+
+    /**
+     * Create an alias (SubqueryAlias) for a sub-query. This is practically the same as
+     * visitAliasedRelation and visitNamedExpression, ANTLR4 however requires us to use 3 different
+     * hooks. We could add alias names for output columns, for example:
+     * {{{
+     *   SELECT col1, col2 FROM testData AS t(col1, col2)
+     * }}}
+     */
+    @Override
+    public LogicalPlan visitAliasedQuery(AliasedQueryContext ctx) {
+        return withOrigin(ctx, () -> {
+            LogicalPlan relation = plan(ctx.query());
+            if (ctx.tableAlias().strictIdentifier() == null) {
+                return new SubqueryAlias("__auto_generated_subquery_name", relation);
+            } else {
+                return mayApplyAliasPlan(ctx.tableAlias(), relation);
+            }
+        });
+    }
+
+    /**
+     * Create an alias ([[SubqueryAlias]]) for a [[LogicalPlan]].
+     */
+    private LogicalPlan aliasPlan(TableAliasContext alias, LogicalPlan plan) {
+        return new SubqueryAlias(alias.getText(), plan);
+    }
+
+    /**
+     * If aliases specified in a FROM clause, create a subquery alias ([[SubqueryAlias]]) and
+     * column aliases for a [[LogicalPlan]].
+     */
+    private LogicalPlan mayApplyAliasPlan(TableAliasContext tableAlias, LogicalPlan plan) {
+        if (tableAlias.strictIdentifier() != null ) {
+            // 定义了别名
+            return new SubqueryAlias(tableAlias.strictIdentifier().getText(), plan);
+        } else {
+            return plan;
+        }
+    }
+
+    /**
+     * Create a logical plan using a where clause.
+     */
+    private LogicalPlan withWhereClause(WhereClauseContext ctx, LogicalPlan plan) {
+        return withOrigin(ctx, () -> new Filter(expression(ctx.booleanExpression()), plan));
+    }
+
+    /**
+     * Create a multi-part identifier.
+     */
+    @Override
+    public List<String> visitMultipartIdentifier(MultipartIdentifierContext ctx) {
+        return withOrigin(ctx, () -> ctx.parts.stream().map(x -> x.getText()).collect(Collectors.toList()));
+    }
 
 
     @Override
@@ -154,6 +219,14 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     protected Expression expression(ParserRuleContext ctx) {
         return typedVisit(ctx);
+    }
+
+    /**
+     * Invert a boolean expression.
+     */
+    @Override
+    public Object visitLogicalNot(LogicalNotContext ctx) {
+        return withOrigin(ctx, () -> new Not(expression(ctx.booleanExpression())));
     }
 
     /**
