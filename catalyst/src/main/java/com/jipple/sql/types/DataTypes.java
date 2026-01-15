@@ -26,4 +26,22 @@ public class DataTypes {
             return "numeric";
         }
     };
+
+    public static final AbstractDataType ANY = new AbstractDataType() {
+
+        @Override
+        public DataType defaultConcreteType() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean acceptsType(DataType other) {
+            return true;
+        }
+
+        @Override
+        public String simpleString() {
+            return "any";
+        }
+    };
 }

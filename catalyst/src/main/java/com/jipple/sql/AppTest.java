@@ -1,6 +1,12 @@
 package com.jipple.sql;
 
 import com.jipple.sql.catalyst.parser.CatalystSqlParser;
+import com.jipple.sql.catalyst.plans.logical.LogicalPlan;
+import com.jipple.sql.catalyst.util.TypeUtils;
+
+import java.util.Comparator;
+
+import static com.jipple.sql.types.DataTypes.INTEGER;
 
 public class AppTest {
 
@@ -10,6 +16,8 @@ public class AppTest {
         System.out.println(expr);
         var exprs = parser.parseExpressions("a, b");
         System.out.println(exprs);
+        var plan = parser.parsePlan("select a, b, 1 c, 2, nvl(d, 0) d, 1 + 2 e");
+        System.out.println(plan);
     }
 
 }

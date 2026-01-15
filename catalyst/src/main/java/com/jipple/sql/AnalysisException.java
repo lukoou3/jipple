@@ -25,7 +25,7 @@ public class AnalysisException extends RuntimeException implements JippleThrowab
     private Origin _origin;
     
     // Main constructor
-    AnalysisException(String message, Integer line, Integer startPosition,
+    public AnalysisException(String message, Integer line, Integer startPosition,
                       Throwable cause, String errorClass,
                       Map<String, String> messageParameters, QueryContext[] context) {
         super(message, cause);

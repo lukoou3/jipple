@@ -8,6 +8,9 @@ import com.jipple.sql.catalyst.expressions.named.NamedExpression;
 import com.jipple.sql.catalyst.expressions.named.UnresolvedAlias;
 import com.jipple.sql.catalyst.expressions.named.UnresolvedAttribute;
 import com.jipple.sql.catalyst.parser.SqlBaseParser.*;
+import com.jipple.sql.catalyst.plans.logical.LogicalPlan;
+import com.jipple.sql.catalyst.plans.logical.OneRowRelation;
+import com.jipple.sql.catalyst.plans.logical.Project;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 
@@ -47,6 +50,75 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
     }
 
     @Override
+    public LogicalPlan visitSingleStatement(SingleStatementContext ctx) {
+        return withOrigin(ctx, () -> (LogicalPlan)visit(ctx.statement()));
+    }
+
+    /* ********************************************************************************************
+     * Plan parsing
+     * ******************************************************************************************** */
+    protected LogicalPlan plan(ParserRuleContext tree) {
+        return typedVisit(tree);
+    }
+
+    @Override
+    public LogicalPlan visitQuery(QueryContext ctx) {
+        return withOrigin(ctx, () ->
+            plan(ctx.queryTerm()).optionalMap(ctx.queryOrganization(), this::withQueryResultClauses)
+        );
+    }
+
+    /**
+     * Add ORDER BY/SORT BY/CLUSTER BY/DISTRIBUTE BY/LIMIT/WINDOWS clauses to the logical plan. These
+     * clauses determine the shape (ordering/partitioning/rows) of the query result.
+     */
+    private LogicalPlan withQueryResultClauses(QueryOrganizationContext ctx, LogicalPlan query) {
+        return withOrigin(ctx, () -> {
+            // withOrder
+            LogicalPlan withOrder = query;
+            // LIMIT
+            return withOrder;
+        });
+    }
+
+    @Override
+    public LogicalPlan visitRegularQuerySpecification(RegularQuerySpecificationContext ctx) {
+        LogicalPlan relation = new OneRowRelation().optional(ctx.fromClause(), () ->
+            visitFromClause(ctx.fromClause())
+        );
+
+        LogicalPlan withFilter = relation;
+
+        List<Expression> expressions = visitNamedExpressionSeq(ctx.selectClause().namedExpressionSeq());
+        // Add aggregation or a project.
+        List<Expression> namedExpressions = expressions.stream().map(e -> {
+            if (e instanceof NamedExpression) {
+                return e;
+            } else {
+                return new UnresolvedAlias(e);
+            }
+        }).collect(Collectors.toList());
+
+        if (namedExpressions.size() > 0) {
+            return new Project(namedExpressions, withFilter);
+        } else {
+            return withFilter;
+        }
+    }
+
+    @Override
+    public LogicalPlan visitFromClause(FromClauseContext ctx) {
+        return withOrigin(ctx, () -> {
+            RelationContext relation = ctx.relation();
+            LogicalPlan table = plan(relation);
+            //return withJoinRelations(table, relation);
+            return table;
+        });
+    }
+
+
+
+    @Override
     public Expression visitNamedExpression(NamedExpressionContext ctx) {
         return withOrigin(ctx, () -> {
             Expression e = expression(ctx.expression());
@@ -81,6 +153,26 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
         return typedVisit(ctx);
     }
 
+    /**
+     * Create a unary arithmetic expression. The following arithmetic operators are supported:
+     * - Plus: '+'
+     * - Minus: '-'
+     * - Bitwise Not: '~'
+     */
+    @Override
+    public Expression visitArithmeticUnary(ArithmeticUnaryContext ctx) {
+        return withOrigin(ctx, () -> {
+            Expression value = expression(ctx.valueExpression());
+            switch (ctx.operator.getType()) {
+                //case SqlBaseParser.PLUS:
+                    //return new UnaryPositive(value);
+                //case SqlBaseParser.MINUS:
+                    //return new UnaryMinus(value);
+                default:
+                    throw new ParseException("Unsupported arithmetic operator: " + ctx.operator.getText(),  ctx);
+            }
+        });
+    }
 
     /**
      * Create an UnresolvedAttribute expression  if it is a regex
@@ -90,7 +182,6 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
     public Expression visitColumnReference(ColumnReferenceContext ctx) {
         return withOrigin(ctx, () -> UnresolvedAttribute.quoted(ctx.getText())); //创建列引用
     }
-
 
     /**
      * 没在.g4文件定义的函数应该都是这个入口, udf就是这个入口

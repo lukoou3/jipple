@@ -18,22 +18,26 @@ import java.util.Map;
  */
 public class ParseException extends AnalysisException {
     
-    private final String command;
-    private final Origin start;
-    private final Origin stop;
+    public final String command;
+    public final Origin start;
+    public final Origin stop;
     private final QueryContext[] queryContext;
     
     // Main constructor
     public ParseException(String command, String message, Origin start, Origin stop,
                           String errorClass, Map<String, String> messageParameters,
                           QueryContext[] queryContext) {
-        super(errorClass, messageParameters, queryContext, message);
+        super(message, start.line, start.startPosition, null, errorClass, messageParameters, queryContext);
         this.command = command;
         this.start = start;
         this.stop = stop;
         this.queryContext = queryContext;
     }
-    
+
+    public ParseException(String command, String message, Origin start, Origin stop) {
+        this(command, message, start, stop, null, null, null);
+    }
+
     public ParseException(String errorClass, Map<String, String> messageParameters,
                           ParserRuleContext ctx) {
         this(

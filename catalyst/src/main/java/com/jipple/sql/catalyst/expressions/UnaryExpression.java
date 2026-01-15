@@ -1,5 +1,6 @@
 package com.jipple.sql.catalyst.expressions;
 
+import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.trees.UnaryLike;
 
 import java.util.List;
@@ -39,6 +40,29 @@ public abstract class UnaryExpression extends Expression implements UnaryLike<Ex
     @Override
     public boolean nullable() {
         return child.nullable();
+    }
+
+    /**
+     * Default behavior of evaluation according to the default nullability of UnaryExpression.
+     * If subclass of UnaryExpression override nullable, probably should also override this.
+     */
+    @Override
+    public Object eval(InternalRow input) {
+        var value = child.eval(input);
+        if (value == null) {
+            return null;
+        } else {
+            return nullSafeEval(value);
+        }
+    }
+
+    /**
+     * Called by default [[eval]] implementation.  If subclass of UnaryExpression keep the default
+     * nullability, they can override this method to save null-check code.  If we need full control
+     * of evaluation process, we should override [[eval]].
+     */
+    protected Object nullSafeEval(Object input) {
+        throw new UnsupportedOperationException("not implements nullSafeEval for: " + this.getClass());
     }
 
     @Override
