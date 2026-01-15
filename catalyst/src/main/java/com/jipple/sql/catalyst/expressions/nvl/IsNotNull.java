@@ -7,9 +7,9 @@ import com.jipple.sql.types.DataType;
 
 import static com.jipple.sql.types.DataTypes.BOOLEAN;
 
-public class IsNull extends UnaryExpression {
+public class IsNotNull extends UnaryExpression {
 
-    public IsNull(Expression child) {
+    public IsNotNull(Expression child) {
         super(child);
     }
 
@@ -20,11 +20,11 @@ public class IsNull extends UnaryExpression {
 
     @Override
     public Object eval(InternalRow input) {
-        return child.eval(input) == null;
+        return child.eval(input) != null;
     }
 
     @Override
     public Expression withNewChildInternal(Expression newChild) {
-        return new IsNull(newChild);
+        return new IsNotNull(newChild);
     }
 }

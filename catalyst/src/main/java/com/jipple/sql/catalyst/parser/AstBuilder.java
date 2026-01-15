@@ -4,7 +4,9 @@ import com.jipple.sql.catalyst.analysis.unresolved.UnresolvedFunction;
 import com.jipple.sql.catalyst.expressions.*;
 import com.jipple.sql.catalyst.expressions.arithmetic.*;
 import com.jipple.sql.catalyst.expressions.named.*;
+import com.jipple.sql.catalyst.expressions.nvl.*;
 import com.jipple.sql.catalyst.expressions.predicate.*;
+import com.jipple.sql.catalyst.expressions.regexp.*;
 import com.jipple.sql.catalyst.parser.SqlBaseParser.*;
 import com.jipple.sql.catalyst.plans.logical.LogicalPlan;
 import com.jipple.sql.catalyst.plans.logical.OneRowRelation;
@@ -152,6 +154,92 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     protected Expression expression(ParserRuleContext ctx) {
         return typedVisit(ctx);
+    }
+
+    /**
+     * Create a predicated expression. A predicated expression is a normal expression with a
+     * predicate attached to it, for example:
+     * {{{ a + 1 IS NULL }}}
+     */
+    @Override
+    public Expression visitPredicated(PredicatedContext ctx) {
+        return withOrigin(ctx, () -> {
+            Expression e = expression(ctx.valueExpression());
+            if (ctx.predicate() != null) {
+                return withPredicate(e, ctx.predicate());
+            }
+            return e;
+        });
+    }
+
+    /**
+     * Add a predicate to the given expression. Supported expressions are:
+     * - (NOT) BETWEEN
+     * - (NOT) IN
+     * - (NOT) LIKE (ANY | SOME | ALL)
+     * - (NOT) RLIKE
+     * - IS (NOT) NULL.
+     * - IS (NOT) (TRUE | FALSE | UNKNOWN)
+     * - IS (NOT) DISTINCT FROM
+     */
+    private Expression withPredicate(Expression e, PredicateContext ctx) {
+        return withOrigin(ctx, () -> {
+            // Invert a predicate if it has a valid NOT clause.
+            Function<Expression, Expression> invertIfNotDefined = expression -> {
+                if (ctx.NOT() == null) {
+                    return expression;
+                }
+                return new Not(expression);
+            };
+
+            // Create the predicate.
+            switch (ctx.kind.getType()) {
+                case SqlBaseParser.BETWEEN:
+                    // BETWEEN is translated to lower <= e && e <= upper
+                    return invertIfNotDefined.apply(new And(
+                            new GreaterThanOrEqual(e, expression(ctx.lower)),
+                            new LessThanOrEqual(e, expression(ctx.upper))));
+                case SqlBaseParser.IN:
+                    List<Expression> values = new ArrayList<>();
+                    for (ExpressionContext valueCtx : ctx.expression()) {
+                        values.add(expression(valueCtx));
+                    }
+                    return invertIfNotDefined.apply(new In(e, values));
+                case SqlBaseParser.LIKE:
+                    String escapeString = null;
+                    if (ctx.escapeChar != null) {
+                        escapeString = ctx.escapeChar.getText();
+                        if (escapeString.length() >= 2 &&
+                                escapeString.charAt(0) == escapeString.charAt(escapeString.length() - 1)) {
+                            escapeString = escapeString.substring(1, escapeString.length() - 1);
+                        }
+                        if (escapeString.length() != 1) {
+                            throw new ParseException("Invalid escape string. Escape string must contain only one character.", ctx);
+                        }
+                    }
+                    char escapeChar = escapeString == null ? '\\' : escapeString.charAt(0);
+                    return invertIfNotDefined.apply(new Like(e, expression(ctx.pattern), escapeChar));
+                case SqlBaseParser.RLIKE:
+                    return invertIfNotDefined.apply(new RLike(e, expression(ctx.pattern)));
+                case SqlBaseParser.NULL:
+                    if (ctx.NOT() != null) {
+                        return new IsNotNull(e);
+                    }
+                    return new IsNull(e);
+                case SqlBaseParser.TRUE:
+                    if (ctx.NOT() == null) {
+                        return new EqualNullSafe(e, Literal.of(true));
+                    }
+                    return new Not(new EqualNullSafe(e, Literal.of(true)));
+                case SqlBaseParser.FALSE:
+                    if (ctx.NOT() == null) {
+                        return new EqualNullSafe(e, Literal.of(false));
+                    }
+                    return new Not(new EqualNullSafe(e, Literal.of(false)));
+                default:
+                    throw new ParseException("Unsupported predicate: " + ctx.getText(), ctx);
+            }
+        });
     }
 
     /**
@@ -486,5 +574,29 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
             return numericLiteral(ctx, rawStrippedQualifier, new BigDecimal(Double.MIN_VALUE), new BigDecimal(Double.MAX_VALUE), DOUBLE.simpleString(), Double::parseDouble);
         });
     }
+
+    /**
+     * Create a String literal expression.
+     */
+    @Override
+    public Object visitStringLiteral(StringLiteralContext ctx) {
+        return withOrigin(ctx, () -> Literal.of(createString(ctx)));
+    }
+
+    /**
+     * Create a String from a string literal context. This supports multiple consecutive string
+     * literals, these are concatenated, for example this expression "'hello' 'world'" will be
+     * converted into "helloworld".
+     *
+     * Special characters can be escaped by using Hive/C-style escaping.
+     */
+    private String createString(StringLiteralContext ctx) {
+        if (false) {
+            return ctx.STRING().stream().map(ParserUtils::stringWithoutUnescape).collect(Collectors.joining());
+        } else {
+            return ctx.STRING().stream().map(ParserUtils::string).collect(Collectors.joining());
+        }
+    }
+
 
 }

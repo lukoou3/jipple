@@ -18,7 +18,7 @@ public class AppTest {
         System.out.println(exprs);
         var plan = parser.parsePlan("select a, b, 1 c, 2, nvl(d, 0) d, 1 + 2 e");
         System.out.println(plan);
-        plan = parser.parsePlan("select a and b and c and d and e or f x");
+        plan = parser.parsePlan("select x is null a, x like 'a' b, x not like 'a' c");
         System.out.println(plan);
     }
 
