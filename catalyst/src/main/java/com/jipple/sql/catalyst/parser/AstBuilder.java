@@ -1,18 +1,17 @@
 package com.jipple.sql.catalyst.parser;
 
 import com.jipple.sql.catalyst.analysis.unresolved.UnresolvedFunction;
-import com.jipple.sql.catalyst.expressions.Expression;
-import com.jipple.sql.catalyst.expressions.Literal;
-import com.jipple.sql.catalyst.expressions.named.Alias;
-import com.jipple.sql.catalyst.expressions.named.NamedExpression;
-import com.jipple.sql.catalyst.expressions.named.UnresolvedAlias;
-import com.jipple.sql.catalyst.expressions.named.UnresolvedAttribute;
+import com.jipple.sql.catalyst.expressions.*;
+import com.jipple.sql.catalyst.expressions.arithmetic.*;
+import com.jipple.sql.catalyst.expressions.named.*;
+import com.jipple.sql.catalyst.expressions.predicate.*;
 import com.jipple.sql.catalyst.parser.SqlBaseParser.*;
 import com.jipple.sql.catalyst.plans.logical.LogicalPlan;
 import com.jipple.sql.catalyst.plans.logical.OneRowRelation;
 import com.jipple.sql.catalyst.plans.logical.Project;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -154,6 +153,80 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
     }
 
     /**
+     * Create a comparison expression. This compares two expressions. The following comparison
+     * operators are supported:
+     * - Equal: '=' or '=='
+     * - Null-safe Equal: '<=>'
+     * - Not Equal: '<>' or '!='
+     * - Less than: '<'
+     * - Less then or Equal: '<='
+     * - Greater than: '>'
+     * - Greater then or Equal: '>='
+     */
+    @Override
+    public Expression visitComparison(ComparisonContext ctx) {
+        return withOrigin(ctx, () -> {
+            Expression left = expression(ctx.left);
+            Expression right = expression(ctx.right);
+            TerminalNode operator = (TerminalNode)ctx.comparisonOperator().getChild(0);
+            switch (operator.getSymbol().getType()) {
+                case SqlBaseParser.EQ:
+                    return new EqualTo(left, right);
+                case SqlBaseParser.NSEQ:
+                    return new EqualNullSafe(left, right);
+                case SqlBaseParser.NEQ | SqlBaseParser.NEQJ:
+                    return new Not(new EqualTo(left, right));
+                case SqlBaseParser.LT:
+                    return new LessThan(left, right);
+                case SqlBaseParser.LTE:
+                    return new LessThanOrEqual(left, right);
+                case SqlBaseParser.GT:
+                    return new GreaterThan(left, right);
+                case SqlBaseParser.GTE:
+                    return new GreaterThanOrEqual(left, right);
+                default:
+                    throw new ParseException("Unsupported comparison operator: " + operator.getText(),  ctx);
+            }
+        });
+    }
+
+    /**
+     * Create a binary arithmetic expression. The following arithmetic operators are supported:
+     * - Multiplication: '*'
+     * - Division: '/'
+     * - Hive Long Division: 'DIV'
+     * - Modulo: '%'
+     * - Addition: '+'
+     * - Subtraction: '-'
+     * - Binary AND: '&'
+     * - Binary XOR
+     * - Binary OR: '|'
+     */
+    @Override
+    public Expression visitArithmeticBinary(ArithmeticBinaryContext ctx) {
+        return withOrigin(ctx, () -> {
+            Expression left = expression(ctx.left);
+            Expression right = expression(ctx.right);
+            switch (ctx.operator.getType()) {
+                case SqlBaseParser.ASTERISK:
+                    return new Multiply(left, right);
+                case SqlBaseParser.SLASH:
+                    return new Divide(left, right);
+                case SqlBaseParser.PERCENT:
+                    return new Remainder(left, right);
+                case SqlBaseParser.DIV:
+                    return new IntegralDivide(left, right);
+                case SqlBaseParser.PLUS:
+                    return new Add(left, right);
+                    case SqlBaseParser.MINUS:
+                        return new Subtract(left, right);
+                default:
+                    throw new ParseException("Unsupported arithmetic operator: " + ctx.operator.getText(),  ctx);
+            }
+        });
+    }
+
+    /**
      * Create a unary arithmetic expression. The following arithmetic operators are supported:
      * - Plus: '+'
      * - Minus: '-'
@@ -164,10 +237,10 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
         return withOrigin(ctx, () -> {
             Expression value = expression(ctx.valueExpression());
             switch (ctx.operator.getType()) {
-                //case SqlBaseParser.PLUS:
-                    //return new UnaryPositive(value);
-                //case SqlBaseParser.MINUS:
-                    //return new UnaryMinus(value);
+                case SqlBaseParser.PLUS:
+                    return new UnaryPositive(value);
+                case SqlBaseParser.MINUS:
+                    return new UnaryMinus(value);
                 default:
                     throw new ParseException("Unsupported arithmetic operator: " + ctx.operator.getText(),  ctx);
             }
