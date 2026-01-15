@@ -31,6 +31,11 @@ public class UnresolvedAttribute extends Attribute {
     }
 
     @Override
+    public boolean resolved() {
+        return false;
+    }
+
+    @Override
     public DataType dataType() {
         throw new UnresolvedException("dataType");
     }

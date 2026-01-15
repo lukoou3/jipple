@@ -24,6 +24,11 @@ public class IntegralDivide extends DivModLike {
     }
 
     @Override
+    public String sqlOperator() {
+        return "div";
+    }
+
+    @Override
     public Object evalOperation(Object left, Object right) {
         if (div == null) {
             DataType dataType = dataType();

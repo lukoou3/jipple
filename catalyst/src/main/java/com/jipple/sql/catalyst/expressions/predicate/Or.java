@@ -24,6 +24,11 @@ public class Or extends BinaryOperator {
     }
 
     @Override
+    public String sqlOperator() {
+        return "OR";
+    }
+
+    @Override
     public DataType dataType() {
         return BOOLEAN;
     }

@@ -14,8 +14,10 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -150,6 +152,72 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
      */
     protected Expression expression(ParserRuleContext ctx) {
         return typedVisit(ctx);
+    }
+
+    /**
+     * Combine a number of boolean expressions into a balanced expression tree. These expressions are
+     * either combined by a logical {@link And} or a logical {@link Or}.
+     *
+     * A balanced binary tree is created because regular left recursive trees cause considerable
+     * performance degradations and can cause stack overflows.
+     */
+    @Override
+    public Expression visitLogicalBinary(LogicalBinaryContext ctx) {
+        return withOrigin(ctx, () -> {
+            int expressionType = ctx.operator.getType();
+            BiFunction<Expression, Expression, Expression> expressionCombiner;
+            switch (expressionType) {
+                case SqlBaseParser.AND:
+                    expressionCombiner = And::new;
+                    break;
+                case SqlBaseParser.OR:
+                    expressionCombiner = Or::new;
+                    break;
+                default:
+                    throw new ParseException("Unsupported logical operator: " + ctx.operator.getText(), ctx);
+            }
+
+            // Collect all similar left hand contexts.
+            List<ParserRuleContext> contexts = new ArrayList<>();
+            contexts.add(ctx.right);
+            ParserRuleContext current = ctx.left;
+            while (true) {
+                if (current instanceof LogicalBinaryContext lbc && lbc.operator.getType() == expressionType) {
+                    contexts.add(lbc.right);
+                    current = lbc.left;
+                } else {
+                    contexts.add(current);
+                    break;
+                }
+            }
+
+            // Reverse the contexts to have them in the same sequence as in the SQL statement & turn them
+            // into expressions.
+            List<Expression> expressions = new ArrayList<>(contexts.size());
+            for (int i = contexts.size() - 1; i >= 0; i--) {
+                expressions.add(expression(contexts.get(i)));
+            }
+
+            // Create a balanced tree.
+            return reduceToExpressionTree(expressions, 0, expressions.size() - 1, expressionCombiner);
+        });
+    }
+
+    private Expression reduceToExpressionTree(List<Expression> expressions,
+                                              int low,
+                                              int high,
+                                              BiFunction<Expression, Expression, Expression> combiner) {
+        int range = high - low;
+        if (range == 0) {
+            return expressions.get(low);
+        } else if (range == 1) {
+            return combiner.apply(expressions.get(low), expressions.get(high));
+        } else {
+            int mid = low + range / 2;
+            return combiner.apply(
+                    reduceToExpressionTree(expressions, low, mid, combiner),
+                    reduceToExpressionTree(expressions, mid + 1, high, combiner));
+        }
     }
 
     /**

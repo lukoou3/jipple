@@ -28,6 +28,11 @@ public class UnresolvedAlias extends UnaryExpression implements NamedExpression 
     }
 
     @Override
+    public boolean resolved() {
+        return false;
+    }
+
+    @Override
     public Object eval(InternalRow input) {
         throw new UnsupportedOperationException("Cannot evaluate expression: " + this);
     }

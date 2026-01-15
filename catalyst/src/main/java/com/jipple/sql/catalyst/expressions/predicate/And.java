@@ -25,6 +25,11 @@ public class And extends BinaryOperator {
     }
 
     @Override
+    public String sqlOperator() {
+        return "AND";
+    }
+
+    @Override
     public DataType dataType() {
         return BOOLEAN;
     }
