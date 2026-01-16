@@ -20,6 +20,10 @@ public abstract class LogicalPlan extends QueryPlan<LogicalPlan> {
         return children().stream().allMatch(LogicalPlan::resolved);
     }
 
+    @Override
+    protected String statePrefix() {
+        return !resolved() ? "'" : super.statePrefix();
+    }
 
     /**
      * Create a plan using the block of code when the given context exists. Otherwise return the

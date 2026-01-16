@@ -40,6 +40,29 @@ public abstract class QueryPlan<PlanType extends QueryPlan<PlanType>> extends Tr
         }
     }
 
+    /**
+     * A prefix string used when printing the plan.
+     *
+     * We use "!" to indicate an invalid plan, and "'" to indicate an unresolved plan.
+     */
+    protected String statePrefix() {
+        // if (missingInput.nonEmpty && children.nonEmpty) "!" else ""
+        return "";
+    }
 
+    @Override
+    public String simpleString(int maxFields) {
+        return statePrefix() + super.simpleString(maxFields);
+    }
+
+    @Override
+    public String verboseString(int maxFields) {
+        return simpleString(maxFields);
+    }
+
+    @Override
+    public String simpleStringWithNodeId() {
+        return nodeName();
+    }
 
 }

@@ -1,6 +1,7 @@
 package com.jipple.sql.catalyst.expressions;
 
 import com.jipple.collection.Option;
+import com.jipple.error.JippleException;
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
 import com.jipple.sql.catalyst.trees.TreeNode;
@@ -102,6 +103,23 @@ public abstract class Expression extends TreeNode<Expression> {
         } else {
             return "";
         }
+    }
+
+    // Marks this as final, Expression.verboseString should never be called, and thus shouldn't be
+    // overridden by concrete classes.
+    @Override
+    public final String verboseString(int maxFields) {
+        return simpleString(maxFields);
+    }
+
+    @Override
+    public String simpleString(int maxFields) {
+        return toString();
+    }
+
+    @Override
+    public String simpleStringWithNodeId() {
+        throw JippleException.internalError(nodeName() + " does not implement simpleStringWithNodeId");
     }
 
     @Override
