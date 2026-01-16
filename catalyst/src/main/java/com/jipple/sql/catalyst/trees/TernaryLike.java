@@ -1,7 +1,6 @@
-package com.jipple.sql.catalyst.expressions;
+package com.jipple.sql.catalyst.trees;
 
 import com.google.common.base.Preconditions;
-import com.jipple.sql.catalyst.trees.TreeNode;
 
 import java.util.List;
 import java.util.function.Function;

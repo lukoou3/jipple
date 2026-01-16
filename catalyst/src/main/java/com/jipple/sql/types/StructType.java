@@ -22,7 +22,8 @@ public class StructType extends DataType {
 
     @Override
     public DataType asNullable() {
-        return null;
+        StructField[] newFields = Arrays.stream(fields).map(f -> new StructField(f.name, f.dataType.asNullable(), true)).toArray(StructField[]::new);
+        return new StructType(newFields);
     }
 
     @Override

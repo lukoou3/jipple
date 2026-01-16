@@ -7,6 +7,10 @@ public class DataTypes {
     public static final DataType FLOAT = FloatType.INSTANCE;
     public static final DataType DOUBLE = DoubleType.INSTANCE;
     public static final DataType BOOLEAN = BooleanType.INSTANCE;
+    public static final DataType BINARY = BinaryType.INSTANCE;
+    public static final DataType DATE = DateType.INSTANCE;
+    public static final DataType TIMESTAMP = TimestampType.INSTANCE;
+    public static final DataType TIMESTAMP_NTZ = TimestampNTZType.INSTANCE;
     public static final DataType NULL = NullType.INSTANCE;
 
     public static final AbstractDataType NUMERIC = new AbstractDataType() {

@@ -93,4 +93,52 @@ public abstract class DataType extends AbstractDataType {
             return left.equals(right);
         }
     }
+
+    /**
+     * Returns true if the two data types share the same "shape", i.e. the types
+     * are the same, but the field names don't need to be the same.
+     *
+     * @param from the first data type
+     * @param to the second data type
+     * @param ignoreNullability whether to ignore nullability when comparing the types
+     */
+    public static boolean equalsStructurally(DataType from, DataType to, boolean ignoreNullability) {
+        if (from instanceof ArrayType left && to instanceof ArrayType right) {
+            return equalsStructurally(left.elementType, right.elementType, ignoreNullability) &&
+                   (ignoreNullability || left.containsNull == right.containsNull);
+        } else if (from instanceof MapType left && to instanceof MapType right) {
+            return equalsStructurally(left.keyType, right.keyType, ignoreNullability) &&
+                   equalsStructurally(left.valueType, right.valueType, ignoreNullability) &&
+                   (ignoreNullability || left.valueContainsNull == right.valueContainsNull);
+        } else if (from instanceof StructType fromStruct && to instanceof StructType toStruct) {
+            if (fromStruct.fields.length != toStruct.fields.length) {
+                return false;
+            }
+            for (int i = 0; i < fromStruct.fields.length; i++) {
+                StructField l = fromStruct.fields[i];
+                StructField r = toStruct.fields[i];
+                if (!equalsStructurally(l.dataType, r.dataType, ignoreNullability)) {
+                    return false;
+                }
+                if (!ignoreNullability && l.nullable != r.nullable) {
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            return from.equals(to);
+        }
+    }
+
+    /**
+     * Returns true if the two data types share the same "shape", i.e. the types
+     * are the same, but the field names don't need to be the same.
+     * Uses default value false for ignoreNullability.
+     *
+     * @param from the first data type
+     * @param to the second data type
+     */
+    public static boolean equalsStructurally(DataType from, DataType to) {
+        return equalsStructurally(from, to, false);
+    }
 }

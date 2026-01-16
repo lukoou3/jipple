@@ -1,7 +1,7 @@
 package com.jipple.sql.types;
 
 public class BinaryType extends AtomicType {
-
+    public static final BinaryType INSTANCE = new BinaryType();
     private BinaryType() {
     }
 

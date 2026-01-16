@@ -9,6 +9,10 @@ import com.jipple.sql.catalyst.expressions.predicate.*;
 import com.jipple.sql.catalyst.expressions.regexp.*;
 import com.jipple.sql.catalyst.parser.SqlBaseParser.*;
 import com.jipple.sql.catalyst.plans.logical.*;
+import com.jipple.sql.types.ArrayType;
+import com.jipple.sql.types.DataType;
+import com.jipple.sql.types.StructField;
+import com.jipple.sql.types.StructType;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
@@ -477,6 +481,18 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
     }
 
     /**
+     * Create a [[Cast]] expression.
+     */
+    @Override
+    public Object visitCast(CastContext ctx) {
+        return withOrigin(ctx, () -> {
+            DataType rawDataType = typedVisit(ctx.dataType());
+            DataType dataType = rawDataType; // CharVarcharUtils.replaceCharVarcharWithStringForCast(rawDataType)
+            return new Cast(expression(ctx.expression()), dataType);
+        });
+    }
+
+    /**
      * Create an UnresolvedAttribute expression  if it is a regex
      * quoted in ``
      */
@@ -671,5 +687,124 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
         }
     }
 
+
+    /* ********************************************************************************************
+     * DataType parsing
+     * ******************************************************************************************** */
+
+    /**
+     * Resolve/create a primitive type.
+     */
+    @Override
+    public DataType visitPrimitiveDataType(PrimitiveDataTypeContext ctx) {
+        return withOrigin(ctx, () -> {
+            String dataType = ctx.identifier().getText().toLowerCase();
+            List<TerminalNode> params = ctx.INTEGER_VALUE();
+            if (params.isEmpty()) {
+                switch (dataType) {
+                    case "boolean":
+                        return BOOLEAN;
+                    case "int":
+                    case "integer":
+                        return INTEGER;
+                    case "bigint":
+                    case "long":
+                        return LONG;
+                    case "float":
+                    case "real":
+                        return FLOAT;
+                    case "double":
+                        return DOUBLE;
+                    case "string":
+                        return STRING;
+                    case "binary":
+                        return BINARY;
+                    case "date":
+                        return DATE;
+                    case "timestamp_ntz":
+                        return TIMESTAMP;
+                    case "timestamp":
+                        return TIMESTAMP_NTZ;
+                   case "void":
+                        return NULL;
+                }
+            }
+
+            String dtStr = params.isEmpty() ? dataType : dataType + "(" + params.stream().map(TerminalNode::getText).collect(Collectors.joining(",")) + ")";
+            throw new ParseException(String.format("DataType %s is not supported.", dtStr), ctx);
+        });
+    }
+
+    /**
+     * Create a complex DataType. Arrays, Maps and Structures are supported.
+     */
+    @Override
+    public DataType visitComplexDataType(ComplexDataTypeContext ctx) {
+        return withOrigin(ctx, () -> {
+            int complexType = ctx.complex.getType();
+            if (complexType == SqlBaseParser.ARRAY) {
+                return new ArrayType(typedVisit(ctx.dataType(0)));
+            } else if (complexType == SqlBaseParser.MAP) {
+                // MapType(typedVisit(ctx.dataType(0)), typedVisit(ctx.dataType(1)))
+                throw new ParseException("DataType " + ctx.getText() + " is not supported.", ctx);
+            } else if (complexType == SqlBaseParser.STRUCT) {
+                List<StructField> fields;
+                if (ctx.complexColTypeList() != null) {
+                    fields = visitComplexColTypeList(ctx.complexColTypeList());
+                } else {
+                    fields = new ArrayList<>();
+                }
+                return new StructType(fields.toArray(new StructField[fields.size()]));
+            } else {
+                throw new ParseException("Unknown complex data type: " + ctx.getText(), ctx);
+            }
+        });
+    }
+
+    /**
+     * Create a [[StructType]] from a number of column definitions.
+     */
+    @Override
+    public List<StructField> visitColTypeList(ColTypeListContext ctx) {
+        return withOrigin(ctx, () ->
+            ctx.colType().stream().map(this::visitColType).collect(Collectors.toList())
+        );
+    }
+
+    /**
+     * Create a top level [[StructField]] from a column definition.
+     */
+    @Override
+    public StructField visitColType(ColTypeContext ctx) {
+        return withOrigin(ctx, () -> {
+            // 忽略null和注释解析
+            return new StructField(
+                    ctx.colName.getText(),
+                    typedVisit(ctx.dataType())
+            );
+        });
+    }
+
+    /**
+     * Create a [[StructType]] from a number of column definitions.
+     */
+    @Override
+    public List<StructField> visitComplexColTypeList(ComplexColTypeListContext ctx) {
+        return withOrigin(ctx, () ->
+             ctx.complexColType().stream().map(this::visitComplexColType).collect(Collectors.toList())
+        );
+    }
+
+    /**
+     * Create a [[StructField]] from a column definition.
+     */
+    @Override
+    public StructField visitComplexColType(ComplexColTypeContext ctx) {
+        return withOrigin(ctx, () -> {
+            StructField structField = new StructField(ctx.identifier().getText(), typedVisit(ctx.dataType()));
+            // 忽略null和注释解析
+            return structField;
+        });
+    }
 
 }

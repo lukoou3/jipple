@@ -1,6 +1,7 @@
 package com.jipple.sql.catalyst.expressions;
 
 import com.jipple.sql.catalyst.InternalRow;
+import com.jipple.sql.catalyst.trees.TernaryLike;
 
 import java.util.List;
 import java.util.function.Function;

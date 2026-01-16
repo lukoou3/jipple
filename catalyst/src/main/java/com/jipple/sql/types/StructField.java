@@ -6,10 +6,16 @@ import java.util.Objects;
 public class StructField implements Serializable {
     public final String name;
     public final DataType dataType;
+    public final boolean nullable;
 
     public StructField(String name, DataType dataType) {
+        this(name, dataType, true);
+    }
+
+    public StructField(String name, DataType dataType, boolean nullable) {
         this.name = name;
         this.dataType = dataType;
+        this.nullable = nullable;
     }
 
     @Override
