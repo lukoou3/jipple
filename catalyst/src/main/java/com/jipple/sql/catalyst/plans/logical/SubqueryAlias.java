@@ -1,6 +1,6 @@
 package com.jipple.sql.catalyst.plans.logical;
 
-import com.jipple.sql.catalyst.AliasIdentifier;
+import com.jipple.sql.catalyst.identifier.AliasIdentifier;
 import com.jipple.sql.catalyst.expressions.named.Attribute;
 
 import java.util.ArrayList;

@@ -1,4 +1,4 @@
-package com.jipple.sql.catalyst;
+package com.jipple.sql.catalyst.identifier;
 
 import java.util.List;
 

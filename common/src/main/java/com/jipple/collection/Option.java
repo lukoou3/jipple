@@ -41,6 +41,10 @@ public abstract class Option<A> implements Serializable {
         return isEmpty() ? defaultValue : get();
     }
 
+    public A orNull() {
+        return isEmpty() ? null : get();
+    }
+
     public A getOrElseGet(Supplier<? extends A> supplier) {
         return isEmpty() ? supplier.get() : get();
     }
