@@ -127,6 +127,15 @@ public abstract class Expression extends TreeNode<Expression> {
         return prettyName() + flatArguments().map(String::valueOf).collect(Collectors.joining(", ", "(",  ")"));
     }
 
+    /**
+     * Returns SQL representation of this expression.  For expressions extending [[NonSQLExpression]],
+     * this method may return an arbitrary user facing string.
+     */
+    public String sql() {
+        String childrenSQL = children().stream().map(Expression::sql).collect(Collectors.joining(", "));
+        return prettyName() + "(" + childrenSQL + ")";
+    }
+
     /*public void open() {
     }
 

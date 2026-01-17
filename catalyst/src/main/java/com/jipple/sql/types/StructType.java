@@ -1,6 +1,10 @@
 package com.jipple.sql.types;
 
+import com.jipple.sql.catalyst.expressions.named.Attribute;
+import com.jipple.sql.catalyst.expressions.named.AttributeReference;
+
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class StructType extends DataType {
@@ -24,6 +28,10 @@ public class StructType extends DataType {
     public DataType asNullable() {
         StructField[] newFields = Arrays.stream(fields).map(f -> new StructField(f.name, f.dataType.asNullable(), true)).toArray(StructField[]::new);
         return new StructType(newFields);
+    }
+
+    public List<Attribute> toAttributes() {
+        return Arrays.stream(fields).map(f -> new AttributeReference(f.name, f.dataType, f.nullable)).collect(Collectors.toList());
     }
 
     @Override

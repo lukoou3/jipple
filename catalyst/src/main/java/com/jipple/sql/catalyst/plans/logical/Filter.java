@@ -1,6 +1,9 @@
 package com.jipple.sql.catalyst.plans.logical;
 
 import com.jipple.sql.catalyst.expressions.Expression;
+import com.jipple.sql.catalyst.expressions.named.Attribute;
+
+import java.util.List;
 
 public class Filter extends UnaryNode {
     public final Expression condition;
@@ -16,7 +19,13 @@ public class Filter extends UnaryNode {
     }
 
     @Override
+    public List<Attribute> output() {
+        return child.output();
+    }
+
+    @Override
     public LogicalPlan withNewChildInternal(LogicalPlan newChild) {
         return new Filter(condition, newChild);
     }
+
 }

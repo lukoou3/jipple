@@ -2,17 +2,24 @@ package com.jipple.sql.catalyst.trees;
 
 import com.jipple.collection.Option;
 import com.jipple.sql.catalyst.util.PlanStringConcat;
+import org.apache.commons.lang3.ClassUtils;
 
 import java.io.Serializable;
+import java.lang.reflect.Constructor;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public abstract class TreeNode<BaseType extends TreeNode<BaseType>> implements Serializable {
+public abstract class TreeNode<BaseType extends TreeNode<BaseType>> implements WithOrigin, Serializable {
     private Set<TreeNode<BaseType>> _containsChild;
     private Set<TreeNode<?>> _allChildren;
+
+    @Override
+    public Origin origin() {
+        return CurrentOrigin.get();
+    }
 
     public abstract Object[] args();
 
@@ -69,6 +76,66 @@ public abstract class TreeNode<BaseType extends TreeNode<BaseType>> implements S
         return true;
     }
 
+    public BaseType makeCopy(Object[] newArgs) {
+        return makeCopy(newArgs, false);
+    }
+
+    /**
+     * Creates a copy of this type of tree node after a transformation.
+     * Must be overridden by child classes that have constructor arguments
+     * that are not present in the productIterator.
+     * @param newArgs the new product arguments.
+     */
+    public BaseType makeCopy(Object[] newArgs, boolean allowEmptyArgs) {
+        Constructor<?>[] allCtors = getClass().getConstructors();
+        if (newArgs.length == 0 && allCtors.length == 0) {
+            // This is a singleton object which doesn't have any constructor. Just return `this` as we
+            // can't copy it.
+            return self();
+        }
+
+        // Skip no-arg constructors that are just there for kryo.
+        Constructor<?>[] ctors = Arrays.stream(allCtors).filter(x -> allowEmptyArgs || x.getParameterTypes().length != 0).toArray(Constructor<?>[]::new);
+        if (ctors.length == 0) {
+            System.err.println("No valid constructor");
+        }
+
+        Class[] argsArray = new Class[newArgs.length];
+        for (int i = 0; i < newArgs.length; i++) {
+            argsArray[i] = newArgs[i] == null ? null : newArgs[i].getClass();
+        }
+
+        Constructor<?> defaultCtor = null;
+        for (Constructor<?> ctor : ctors) {
+            if (ctor.getParameterTypes().length != newArgs.length) {
+                continue;
+            }
+            if (ClassUtils.isAssignable(argsArray, ctor.getParameterTypes(), true)) {
+                defaultCtor = ctor;
+                break;
+            }
+        }
+
+        if (defaultCtor == null) {
+            defaultCtor = Arrays.stream(ctors).max(Comparator.comparingLong(ctor -> ctor.getParameterCount())).get();
+        }
+
+        try {
+            return (BaseType) defaultCtor.newInstance(newArgs);
+        } catch (Exception e) {
+            throw new IllegalArgumentException(String.format("""
+                    Failed to copy node.
+                    Is otherCopyArgs specified correctly for %s.
+                    Exception message: %s
+                    ctor: %s
+                    types: %s
+                    args: %s
+                    """, nodeName(), e.getMessage(), defaultCtor,
+                    Arrays.stream(newArgs).map(x -> x.getClass().getName()).collect(Collectors.joining(", ")),
+                    Arrays.toString(newArgs)));
+        }
+    }
+
     protected <B> B[] mapProductIterator(Function<Object, B> f) {
         Object[] args = args();
         B[] arr = (B[]) new Object[args.length];
@@ -102,7 +169,7 @@ public abstract class TreeNode<BaseType extends TreeNode<BaseType>> implements S
         return _allChildren;
     }
 
-    BaseType self() {
+    protected BaseType self() {
         return (BaseType) this;
     }
 

@@ -26,6 +26,16 @@ public class UnresolvedAttribute extends Attribute {
     }
 
     @Override
+    public ExprId exprId() {
+        throw new UnresolvedException("exprId");
+    }
+
+    @Override
+    public List<String> qualifier() {
+        throw new UnresolvedException("qualifier");
+    }
+
+    @Override
     public boolean nullable() {
         throw new UnresolvedException("dataType");
     }
@@ -38,6 +48,26 @@ public class UnresolvedAttribute extends Attribute {
     @Override
     public DataType dataType() {
         throw new UnresolvedException("dataType");
+    }
+
+    @Override
+    public UnresolvedAttribute withQualifier(List<String> newQualifier) {
+        return this;
+    }
+
+    @Override
+    public UnresolvedAttribute withName(String newName) {
+        return UnresolvedAttribute.quoted(newName);
+    }
+
+    @Override
+    public UnresolvedAttribute withExprId(ExprId newExprId) {
+        return this;
+    }
+
+    @Override
+    public Attribute newInstance() {
+        return this;
     }
 
     @Override

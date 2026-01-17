@@ -4,6 +4,7 @@ import com.jipple.error.JippleThrowable;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.plans.logical.LogicalPlan;
 import com.jipple.sql.catalyst.trees.WithOrigin;
+import com.jipple.sql.types.DataType;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.atn.PredictionMode;
 import org.antlr.v4.runtime.misc.Interval;
@@ -14,6 +15,13 @@ import java.util.function.Function;
 
 public abstract class AbstractSqlParser {
     protected abstract AstBuilder astBuilder();
+
+    /** Creates/Resolves DataType for a given SQL string. */
+    public DataType parseDataType(String sqlText) {
+        return parse(sqlText, parser ->
+            astBuilder().visitSingleDataType(parser.singleDataType())
+        );
+    }
 
     public Expression parseExpression(String sqlText) {
         return parse(sqlText, parser -> {

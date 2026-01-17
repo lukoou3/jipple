@@ -6,6 +6,8 @@ import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.expressions.UnaryExpression;
 import com.jipple.sql.types.DataType;
 
+import java.util.List;
+
 public class UnresolvedAlias extends UnaryExpression implements NamedExpression {
     public UnresolvedAlias(Expression child) {
         super(child);
@@ -15,6 +17,26 @@ public class UnresolvedAlias extends UnaryExpression implements NamedExpression 
     @Override
     public boolean foldable() {
         return false;
+    }
+
+    @Override
+    public ExprId exprId() {
+        throw new UnresolvedException("exprId");
+    }
+
+    @Override
+    public List<String> qualifier() {
+        throw new UnresolvedException("qualifier");
+    }
+
+    @Override
+    public Attribute toAttribute() {
+        throw new UnresolvedException("toAttribute");
+    }
+
+    @Override
+    public NamedExpression newInstance() {
+        throw new UnresolvedException("newInstance");
     }
 
     @Override

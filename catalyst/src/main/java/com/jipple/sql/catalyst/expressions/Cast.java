@@ -117,6 +117,16 @@ public class Cast extends UnaryExpression implements TimeZoneAwareExpression<Cas
         return new Cast(newChild, dataType, timeZoneId);
     }
 
+    @Override
+    public String toString() {
+        return prettyName() + "(" + child + " as " + dataType.simpleString() + ")";
+    }
+
+    @Override
+    public String sql() {
+        return prettyName().toUpperCase() + "(" + child.sql() + " AS " + dataType.sql() + ")";
+    }
+
     /**
      * Returns true iff we can cast `from` type to `to` type.
      */

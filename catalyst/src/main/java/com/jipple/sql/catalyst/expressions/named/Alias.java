@@ -17,6 +17,10 @@ public class Alias extends UnaryExpression implements NamedExpression {
         this(child, name, ExprId.newExprId(), Collections.emptyList());
     }
 
+    public Alias(Expression child, String name, List<String> qualifier) {
+        this(child, name, ExprId.newExprId(), qualifier);
+    }
+
     public Alias(Expression child, String name, ExprId exprId, List<String> qualifier) {
         super(child);
         this.name = name;
@@ -54,6 +58,30 @@ public class Alias extends UnaryExpression implements NamedExpression {
     @Override
     public String name() {
         return name;
+    }
+
+    @Override
+    public ExprId exprId() {
+        return exprId;
+    }
+
+    @Override
+    public List<String> qualifier() {
+        return qualifier;
+    }
+
+    @Override
+    public Attribute toAttribute() {
+        if (resolved()) {
+            return new AttributeReference(name, child.dataType(), child.nullable(), exprId, qualifier);
+        } else {
+            return UnresolvedAttribute.quoted(name);
+        }
+    }
+
+    @Override
+    public Alias newInstance() {
+        return new Alias(child, name, qualifier);
     }
 
     /** Used to signal the column used to calculate an eventTime watermark (e.g. a#1-T{delayMs}) */

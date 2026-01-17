@@ -40,6 +40,11 @@ public class Literal extends LeafExpression {
         return value == null ? "null" : value.toString();
     }
 
+    @Override
+    public String sql() {
+        return toString();
+    }
+
     private void validateLiteralValue(Object value, DataType dataType) {
         if (!doValidate(value, dataType)) {
             throw new IllegalArgumentException(String.format("Literal must have a corresponding value to %s but class %s found.", dataType, value.getClass()));

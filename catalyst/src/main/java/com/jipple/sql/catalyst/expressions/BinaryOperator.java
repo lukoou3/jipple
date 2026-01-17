@@ -53,4 +53,8 @@ public abstract class BinaryOperator extends BinaryExpression {
         }
     }
 
+    @Override
+    public String sql() {
+        return String.format("(%s %s %s)", left.sql(), sqlOperator(), right.sql());
+    }
 }

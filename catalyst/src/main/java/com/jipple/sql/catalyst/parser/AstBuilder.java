@@ -34,6 +34,10 @@ public class AstBuilder extends SqlBaseBaseVisitor<Object> {
         return (T) ctx.accept(this);
     }
 
+    @Override
+    public DataType visitSingleDataType(SingleDataTypeContext ctx) {
+        return withOrigin(ctx, () -> typedVisit(ctx.dataType()));
+    }
 
     @Override
     public Expression visitSingleExpression(SingleExpressionContext ctx) {

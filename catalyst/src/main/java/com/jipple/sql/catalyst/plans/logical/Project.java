@@ -1,9 +1,11 @@
 package com.jipple.sql.catalyst.plans.logical;
 
 import com.jipple.sql.catalyst.expressions.Expression;
+import com.jipple.sql.catalyst.expressions.named.Attribute;
 import com.jipple.sql.catalyst.expressions.named.NamedExpression;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Project extends UnaryNode {
     public final List<Expression> projectList;
@@ -24,7 +26,13 @@ public class Project extends UnaryNode {
     }
 
     @Override
+    public List<Attribute> output() {
+        return projectList.stream().map(e -> ((NamedExpression)e).toAttribute()).collect(Collectors.toList());
+    }
+
+    @Override
     public LogicalPlan withNewChildInternal(LogicalPlan newChild) {
         return new Project(projectList, newChild);
     }
+
 }
