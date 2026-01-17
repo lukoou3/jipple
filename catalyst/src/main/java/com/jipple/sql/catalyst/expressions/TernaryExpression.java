@@ -11,7 +11,7 @@ public abstract class TernaryExpression extends Expression implements TernaryLik
     public final Expression second;
     public final Expression third;
 
-    protected TernaryExpression(Expression first, Expression second, Expression third) {
+    public TernaryExpression(Expression first, Expression second, Expression third) {
         this.first = first;
         this.second = second;
         this.third = third;

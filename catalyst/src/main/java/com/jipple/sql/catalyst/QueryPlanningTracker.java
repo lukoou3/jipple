@@ -173,7 +173,7 @@ public class QueryPlanningTracker {
      * @param analyzedPlan The plan after analysis,
      *                     see @com.jipple.sql.catalyst.analysis.Analyzer
      */
-    void setAnalyzed(LogicalPlan analyzedPlan) {
+    public void setAnalyzed(LogicalPlan analyzedPlan) {
         trackerCallback.forEach(callback -> callback.analyzed(this, analyzedPlan));
     }
 

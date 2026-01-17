@@ -1,7 +1,6 @@
 package com.jipple.sql.types;
 
 public class DecimalType  extends FractionalType {
-    public static final int MAX_PRECISION = 38;
     public final int precision;
     public final int scale;
 
@@ -67,6 +66,11 @@ public class DecimalType  extends FractionalType {
             throw new IllegalArgumentException(String.format("Negative scale is not allowed: %d. ", scale));
         }
     }
+
+    public static final int MAX_PRECISION = 38;
+    public static final int MAX_SCALE = 38;
+    public static final int DEFAULT_SCALE = 18;
+    public static final  DecimalType SYSTEM_DEFAULT = new DecimalType(MAX_PRECISION, DEFAULT_SCALE);
 
     // The decimal types compatible with other numeric types
     public static final DecimalType BooleanDecimal = new DecimalType(1, 0);

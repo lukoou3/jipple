@@ -37,6 +37,10 @@ public class AnalysisException extends RuntimeException implements JippleThrowab
         this.messageParameters = messageParameters != null ? new HashMap<>(messageParameters) : new HashMap<>();
         this.context = context != null ? context : new QueryContext[0];
     }
+
+    public AnalysisException(String message) {
+        this(message, null, null, null, null, null, null);
+    }
     
     public AnalysisException(String errorClass, Map<String, String> messageParameters, Throwable cause) {
         this(

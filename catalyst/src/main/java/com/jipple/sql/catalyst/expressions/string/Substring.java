@@ -12,7 +12,7 @@ import java.util.List;
 import static com.jipple.sql.types.DataTypes.*;
 
 public class Substring extends TernaryExpression {
-    protected Substring(Expression str, Expression pos, Expression len) {
+    public Substring(Expression str, Expression pos, Expression len) {
         super(str, pos, len);
     }
 

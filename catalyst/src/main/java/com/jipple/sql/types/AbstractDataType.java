@@ -31,4 +31,17 @@ public abstract class AbstractDataType implements Serializable {
      * Readable string representation for the type.
      */
     public abstract String simpleString();
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        return true;
+    }
+
 }

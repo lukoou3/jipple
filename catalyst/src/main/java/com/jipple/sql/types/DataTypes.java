@@ -1,17 +1,17 @@
 package com.jipple.sql.types;
 
 public class DataTypes {
-    public static final DataType STRING = StringType.INSTANCE;
-    public static final DataType INTEGER = IntegerType.INSTANCE;
-    public static final DataType LONG = LongType.INSTANCE;
-    public static final DataType FLOAT = FloatType.INSTANCE;
-    public static final DataType DOUBLE = DoubleType.INSTANCE;
-    public static final DataType BOOLEAN = BooleanType.INSTANCE;
-    public static final DataType BINARY = BinaryType.INSTANCE;
-    public static final DataType DATE = DateType.INSTANCE;
-    public static final DataType TIMESTAMP = TimestampType.INSTANCE;
-    public static final DataType TIMESTAMP_NTZ = TimestampNTZType.INSTANCE;
-    public static final DataType NULL = NullType.INSTANCE;
+    public static final StringType STRING = StringType.INSTANCE;
+    public static final IntegerType INTEGER = IntegerType.INSTANCE;
+    public static final LongType LONG = LongType.INSTANCE;
+    public static final FloatType FLOAT = FloatType.INSTANCE;
+    public static final DoubleType DOUBLE = DoubleType.INSTANCE;
+    public static final BooleanType BOOLEAN = BooleanType.INSTANCE;
+    public static final BinaryType BINARY = BinaryType.INSTANCE;
+    public static final DateType DATE = DateType.INSTANCE;
+    public static final TimestampType TIMESTAMP = TimestampType.INSTANCE;
+    public static final TimestampNTZType TIMESTAMP_NTZ = TimestampNTZType.INSTANCE;
+    public static final NullType NULL = NullType.INSTANCE;
 
     public static final AbstractDataType NUMERIC = new AbstractDataType() {
 

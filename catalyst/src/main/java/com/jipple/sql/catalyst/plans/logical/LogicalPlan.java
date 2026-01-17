@@ -8,6 +8,7 @@ import com.jipple.sql.catalyst.plans.QueryPlan;
 
 import java.util.List;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -15,6 +16,19 @@ public abstract class LogicalPlan extends QueryPlan<LogicalPlan> {
     private Boolean _resolved;
     private AttributeSeq _childAttributes;
     private AttributeSeq _outputAttributes;
+    private boolean _analyzed = false;
+
+
+    public void setAnalyzed() {
+        if (!_analyzed) {
+            _analyzed = true;
+            children().forEach(LogicalPlan::setAnalyzed);
+        }
+    }
+
+    public boolean analyzed() {
+        return _analyzed;
+    }
 
     public boolean resolved() {
         if (_resolved == null) {
@@ -39,6 +53,34 @@ public abstract class LogicalPlan extends QueryPlan<LogicalPlan> {
             _outputAttributes = new AttributeSeq(output());
         }
         return _outputAttributes;
+    }
+
+    /**
+     * Recursively transforms the expressions of a tree, skipping nodes that have already
+     * been analyzed.
+     */
+    public LogicalPlan resolveExpressionsUp(Function<Expression, Expression> f) {
+        return resolveOperatorsUp(p -> p.transformExpressions(f));
+    }
+
+    /**
+     * Returns a copy of this node where `rule` has been recursively applied first to all of its
+     * children and then itself (post-order, bottom-up). When `rule` does not apply to a given node,
+     * it is left unchanged.  This function is similar to `transformUp`, but skips sub-trees that
+     * have already been marked as analyzed.
+     *
+     * @param rule the function use to transform this nodes children
+     */
+    public final LogicalPlan resolveOperatorsUp(Function<LogicalPlan, LogicalPlan> rule) {
+        if (analyzed()) {
+            return this;
+        }
+        LogicalPlan afterRuleOnChildren = mapChildren(x -> x.resolveOperatorsUp(rule));
+        if (this.fastEquals(afterRuleOnChildren)) {
+            return rule.apply(this);
+        } else {
+            return rule.apply(afterRuleOnChildren);
+        }
     }
 
     /**

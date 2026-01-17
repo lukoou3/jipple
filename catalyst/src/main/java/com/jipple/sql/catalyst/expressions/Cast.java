@@ -371,7 +371,7 @@ public class Cast extends UnaryExpression implements TimeZoneAwareExpression<Cas
      * may return null. Note that the caller side should take care of input nullability
      * first and only call this method if the input is not nullable.
      */
-    private static boolean forceNullable(DataType from, DataType to) {
+    public static boolean forceNullable(DataType from, DataType to) {
         // NullType to any type - empty array or map case
         if (from instanceof NullType) {
             return false;

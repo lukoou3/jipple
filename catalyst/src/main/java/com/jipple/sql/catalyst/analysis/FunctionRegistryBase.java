@@ -3,10 +3,18 @@ package com.jipple.sql.catalyst.analysis;
 import com.jipple.collection.Option;
 import com.jipple.sql.AnalysisException;
 import com.jipple.sql.catalyst.expressions.Expression;
+import com.jipple.sql.catalyst.expressions.ExpressionDescription;
 import com.jipple.sql.catalyst.expressions.ExpressionInfo;
+import com.jipple.sql.catalyst.expressions.InheritAnalysisRules;
 import com.jipple.sql.catalyst.identifier.FunctionIdentifier;
+import com.jipple.sql.errors.QueryCompilationErrors;
+import com.jipple.tuple.Tuple2;
 
+import java.lang.reflect.Constructor;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.TreeSet;
 
 /**
  * A catalog for looking up user defined functions, used by an {@link Analyzer}.
@@ -64,4 +72,129 @@ public interface FunctionRegistryBase<T> {
 
     /** Clear all registered functions. */
     void clear();
+
+    /**
+     * Return an expression info and a function builder for the function as defined by {@code clazz}
+     * using the given name.
+     */
+    static <T> Tuple2<ExpressionInfo, FunctionBuilder<T>> build(
+        Class<T> clazz,
+        String name,
+        Option<String> since) {
+        boolean isRuntime = InheritAnalysisRules.class.isAssignableFrom(clazz);
+        Constructor<?>[] constructors = clazz.getConstructors();
+        List<Constructor<?>> candidateConstructors;
+        if (isRuntime) {
+            int maxNumArgs = Arrays.stream(constructors)
+                .mapToInt(Constructor::getParameterCount)
+                .max()
+                .orElse(0);
+            candidateConstructors = new ArrayList<>();
+            for (Constructor<?> constructor : constructors) {
+                if (constructor.getParameterCount() != maxNumArgs) {
+                    candidateConstructors.add(constructor);
+                }
+            }
+        } else {
+            candidateConstructors = Arrays.asList(constructors);
+        }
+        if (candidateConstructors.isEmpty()) {
+            throw new IllegalArgumentException("Cannot find a valid constructor for " + clazz.getCanonicalName());
+        }
+
+        Constructor<?> varargCtor = null;
+        for (Constructor<?> constructor : candidateConstructors) {
+            Class<?>[] params = constructor.getParameterTypes();
+            if (params.length == 1 && List.class.isAssignableFrom(params[0])) {
+                varargCtor = constructor;
+                break;
+            }
+        }
+        final Constructor<?> varargConstructor = varargCtor;
+
+        FunctionBuilder<T> builder = expressions -> {
+            if (varargConstructor != null) {
+                try {
+                    return clazz.cast(varargConstructor.newInstance(expressions));
+                } catch (Exception e) {
+                    throw QueryCompilationErrors.funcBuildError(name, e);
+                }
+            }
+
+            Class<?>[] params = new Class<?>[expressions.size()];
+            Arrays.fill(params, Expression.class);
+            Constructor<?> matched = null;
+            for (Constructor<?> constructor : candidateConstructors) {
+                if (Arrays.equals(constructor.getParameterTypes(), params)) {
+                    matched = constructor;
+                    break;
+                }
+            }
+            if (matched == null) {
+                TreeSet<Integer> validParametersCount = new TreeSet<>();
+                for (Constructor<?> constructor : candidateConstructors) {
+                    Class<?>[] types = constructor.getParameterTypes();
+                    boolean allExpression = true;
+                    for (Class<?> type : types) {
+                        if (!Expression.class.equals(type)) {
+                            allExpression = false;
+                            break;
+                        }
+                    }
+                    if (allExpression) {
+                        validParametersCount.add(constructor.getParameterCount());
+                    }
+                }
+                throw QueryCompilationErrors.wrongNumArgsError(
+                    name,
+                    new ArrayList<>(validParametersCount),
+                    params.length);
+            }
+
+            try {
+                return clazz.cast(matched.newInstance(expressions.toArray()));
+            } catch (Exception e) {
+                throw QueryCompilationErrors.funcBuildError(name, e);
+            }
+        };
+
+        return Tuple2.of(expressionInfo(clazz, name, since), builder);
+    }
+
+    /**
+     * Creates an {@link ExpressionInfo} for the function as defined by {@code clazz} using the given name.
+     */
+    static <T> ExpressionInfo expressionInfo(Class<T> clazz, String name, Option<String> since) {
+        ExpressionDescription df = clazz.getAnnotation(ExpressionDescription.class);
+        String className = stripTrailingDollar(clazz.getCanonicalName());
+        Option<String> safeSince = since == null ? Option.none() : since;
+        if (df != null) {
+            if (df.extended().isEmpty()) {
+                return new ExpressionInfo(
+                    className,
+                    null,
+                    name,
+                    df.usage(),
+                    df.arguments(),
+                    df.examples(),
+                    df.note(),
+                    df.group(),
+                    safeSince.getOrElse(df.since()),
+                    df.deprecated(),
+                    df.source());
+            }
+            // Backward compatibility with old ExpressionDescription using extended().
+            @SuppressWarnings("deprecation")
+            ExpressionInfo info = new ExpressionInfo(className, null, name, df.usage(), df.extended());
+            return info;
+        }
+        return new ExpressionInfo(className, name);
+    }
+
+    static String stripTrailingDollar(String className) {
+        if (className != null && className.endsWith("$")) {
+            return className.substring(0, className.length() - 1);
+        }
+        return className;
+    }
 }

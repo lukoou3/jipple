@@ -135,7 +135,7 @@ public class ParseException extends AnalysisException {
      * @return the query context array
      */
     private static QueryContext[] getQueryContextStatic() {
-        com.jipple.sql.catalyst.trees.SQLQueryContext context = CurrentOrigin.get().getContext();
+        com.jipple.sql.catalyst.trees.SQLQueryContext context = CurrentOrigin.get().context();
         if (context.isValid()) {
             return new QueryContext[]{context};
         } else {

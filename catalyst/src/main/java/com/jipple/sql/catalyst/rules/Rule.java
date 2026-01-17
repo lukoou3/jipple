@@ -1,7 +1,11 @@
 package com.jipple.sql.catalyst.rules;
 
+import com.jipple.sql.AnalysisException;
 import com.jipple.sql.catalyst.expressions.Expression;
+import com.jipple.sql.catalyst.expressions.Resolver;
 import com.jipple.sql.catalyst.trees.TreeNode;
+
+import java.util.function.Supplier;
 
 public abstract class Rule<TreeType extends TreeNode>   {
     public final String ruleName = initialRuleName();
@@ -16,5 +20,18 @@ public abstract class Rule<TreeType extends TreeNode>   {
     private String initialRuleName() {
         String className = getClass().getName();
         return className.endsWith("$") ? className.substring(0, className.length() - 1) : className;
+    }
+
+    protected Resolver resolver() {
+        return Resolver.caseInsensitiveResolution();
+    }
+
+    /** Catches any AnalysisExceptions thrown by `f` and attaches `t`'s position if any. */
+    protected static <A> A withPosition(TreeNode<?> t, Supplier<A> f) {
+        try {
+            return f.get();
+        } catch (AnalysisException a) {
+            throw a.withPosition(t.origin());
+        }
     }
 }

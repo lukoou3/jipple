@@ -1,5 +1,6 @@
 package com.jipple.sql.catalyst.analysis;
 
+import com.jipple.sql.catalyst.QueryPlanningTracker;
 import com.jipple.sql.catalyst.parser.CatalystSqlParser;
 import com.jipple.sql.catalyst.plans.logical.LogicalPlan;
 import com.jipple.sql.catalyst.plans.logical.RelationPlaceholder;
@@ -24,7 +25,7 @@ public class AnalyzerTest {
         var analyzer = new Analyzer(Map.of("tbl", new RelationPlaceholder(structType.toAttributes(),"tbl")));
         var plan = parser.parsePlan("""
         select
-            a + 1,
+            a + 1L,
             a is null a,
             b like 'a' b,
             b not like 'a' c,
@@ -32,10 +33,10 @@ public class AnalyzerTest {
             substr(c, 1, 3) s
             -- cast(c as array<int>) e,
             -- cast(c as struct<a:int, b:string>) f 
-        from tbl where x > 10L        
+        from tbl where x > 10        
         """);
         System.out.println(plan);
-        var plan2 = analyzer.execute(plan);
+        var plan2 = analyzer.executeAndCheck(plan, new QueryPlanningTracker());
         System.out.println(plan2);
     }
 }

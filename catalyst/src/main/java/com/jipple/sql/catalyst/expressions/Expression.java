@@ -18,6 +18,7 @@ import java.util.stream.StreamSupport;
 public abstract class Expression extends TreeNode<Expression> {
     private Boolean _deterministic;
     private Boolean _resolved;
+    private AttributeSet _references;
 
     public boolean foldable() {
         return false;
@@ -28,6 +29,13 @@ public abstract class Expression extends TreeNode<Expression> {
             _deterministic = children().stream().allMatch(x -> x.deterministic());
         }
         return _deterministic;
+    }
+
+    public AttributeSet references() {
+        if (_references == null) {
+            _references = AttributeSet.fromAttributeSets(children().stream().map(x -> x.references()).collect(Collectors.toList()));;
+        }
+        return _references;
     }
 
     public abstract boolean nullable();

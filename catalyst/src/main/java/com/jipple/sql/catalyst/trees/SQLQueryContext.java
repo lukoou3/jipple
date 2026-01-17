@@ -15,8 +15,8 @@ public class SQLQueryContext implements QueryContext {
     private final String originObjectType;
     private final String originObjectName;
     
-    private String summary;
-    private String fragment;
+    private String _summary;
+    private String _fragment;
     
     public SQLQueryContext(Integer line, Integer startPosition, Integer originStartIndex,
                           Integer originStopIndex, String sqlText, String originObjectType, 
@@ -56,11 +56,11 @@ public class SQLQueryContext implements QueryContext {
      * SELECT '' AS five, i.f1, i.f1 - int('2') AS x FROM INT4_TBL i
      *                          ^^^^^^^^^^^^^^^
      */
-    public String getSummary() {
-        if (summary == null) {
+    public String summary() {
+        if (_summary == null) {
             // If the query context is missing or incorrect, simply return an empty string.
             if (!isValid()) {
-                summary = "";
+                _summary = "";
             } else {
                 String positionContext = "";
                 if (line != null && startPosition != null) {
@@ -127,10 +127,10 @@ public class SQLQueryContext implements QueryContext {
                     }
                     builder.append("\n");
                 }
-                summary = builder.toString();
+                _summary = builder.toString();
             }
         }
-        return summary;
+        return _summary;
     }
     
     /**
@@ -138,14 +138,14 @@ public class SQLQueryContext implements QueryContext {
      */
     @Override
     public String fragment() {
-        if (fragment == null) {
+        if (_fragment == null) {
             if (!isValid()) {
-                fragment = "";
+                _fragment = "";
             } else {
-                fragment = sqlText.substring(originStartIndex, originStopIndex + 1);
+                _fragment = sqlText.substring(originStartIndex, originStopIndex + 1);
             }
         }
-        return fragment;
+        return _fragment;
     }
     
     /**

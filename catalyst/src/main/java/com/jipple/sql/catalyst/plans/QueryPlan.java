@@ -1,6 +1,7 @@
 package com.jipple.sql.catalyst.plans;
 
 import com.jipple.collection.Option;
+import com.jipple.sql.catalyst.expressions.AttributeSet;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.expressions.named.Attribute;
 import com.jipple.sql.catalyst.trees.CurrentOrigin;
@@ -16,7 +17,16 @@ public abstract class QueryPlan<PlanType extends QueryPlan<PlanType>> extends Tr
 
     public abstract List<Attribute> output();
 
-
+    /**
+     * The set of all attributes that are input to this operator by its children.
+     */
+    public AttributeSet inputSet() {
+        List<Expression> inputSet = new ArrayList<>();
+        for (PlanType child : children()) {
+            inputSet.addAll(child.output());
+        }
+        return AttributeSet.of(inputSet);
+    }
 
     public final List<Expression> expressions() {
         List<Expression> expressions = new ArrayList<>();
@@ -43,6 +53,38 @@ public abstract class QueryPlan<PlanType extends QueryPlan<PlanType>> extends Tr
                 seqAddToExpressions(expressions, iterable);
             }
         }
+    }
+
+    /**
+     * Runs {@link #transformExpressionsDown} with {@code rule} on all expressions present
+     * in this query operator.
+     * Users should not expect a specific directionality. If a specific directionality is needed,
+     * transformExpressionsDown or transformExpressionsUp should be used.
+     *
+     * @param rule the rule to be applied to every expression in this operator.
+     */
+    public final PlanType transformExpressions(Function<Expression, Expression> rule) {
+        return transformExpressionsDown(rule);
+    }
+
+    /**
+     * Runs {@link #transformExpressionsDown} with {@code rule} on all expressions present
+     * in this query operator.
+     *
+     * @param rule the rule to be applied to every expression in this operator.
+     */
+    public final PlanType transformExpressionsDown(Function<Expression, Expression> rule) {
+        return mapExpressions(expr -> expr.transformDown(rule));
+    }
+
+    /**
+     * Runs {@link #transformExpressionsUp} with {@code rule} on all expressions present
+     * in this query operator.
+     *
+     * @param rule the rule to be applied to every expression in this operator.
+     */
+    public final PlanType transformExpressionsUp(Function<Expression, Expression> rule) {
+        return mapExpressions(expr -> expr.transformUp(rule));
     }
 
     /**

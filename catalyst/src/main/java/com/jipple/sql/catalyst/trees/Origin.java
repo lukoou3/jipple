@@ -16,8 +16,8 @@ public class Origin {
     public final String sqlText;
     public final String objectType;
     public final String objectName;
-    
-    private SQLQueryContext context;
+
+    private SQLQueryContext _context;
     
     public Origin() {
         this(null, null, null, null, null, null, null);
@@ -43,12 +43,12 @@ public class Origin {
      * 
      * @return the SQL query context
      */
-    public SQLQueryContext getContext() {
-        if (context == null) {
-            context = new SQLQueryContext(line, startPosition, startIndex, stopIndex, 
+    public SQLQueryContext context() {
+        if (_context == null) {
+            _context = new SQLQueryContext(line, startPosition, startIndex, stopIndex,
                                          sqlText, objectType, objectName);
         }
-        return context;
+        return _context;
     }
     
     /**
@@ -57,7 +57,7 @@ public class Origin {
      * @return an array containing the context if valid, empty array otherwise
      */
     public QueryContext[] getQueryContext() {
-        SQLQueryContext ctx = getContext();
+        SQLQueryContext ctx = context();
         if (ctx.isValid()) {
             return new QueryContext[]{ctx};
         } else {

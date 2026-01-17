@@ -49,6 +49,34 @@ public abstract class TreeNode<BaseType extends TreeNode<BaseType>> implements W
 
     protected abstract BaseType withNewChildrenInternal(List<BaseType> newChildren);
 
+
+    /**
+     * Runs the given function on this node and then recursively on [[children]].
+     * @param f the function to be applied to each node in the tree.
+     */
+    public void foreach(Consumer<BaseType> f) {
+        f.accept(self());
+        children().forEach(x -> x.foreach(f));
+    }
+
+    /**
+     * Runs the given function recursively on [[children]] then on this node.
+     * @param f the function to be applied to each node in the tree.
+     */
+    public void foreachUp(Consumer<BaseType> f) {
+        children().forEach(x -> x.foreachUp(f));
+        f.accept(self());
+    }
+
+    public BaseType transformDown(Function<BaseType, BaseType> rule) {
+        BaseType afterRule = rule.apply(self());
+        if (this.fastEquals(afterRule)) {
+            return mapChildren(x -> x.transformDown(rule));
+        } else {
+            return afterRule.mapChildren(x -> x.transformDown(rule));
+        }
+    }
+
     public BaseType transformUp(Function<BaseType, BaseType> rule) {
         BaseType afterRuleOnChildren = mapChildren(x -> x.transformUp(rule));
         if (this.fastEquals(afterRuleOnChildren)) {

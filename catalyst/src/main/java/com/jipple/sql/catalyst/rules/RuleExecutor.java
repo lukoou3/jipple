@@ -219,6 +219,24 @@ public abstract class RuleExecutor<TreeType extends TreeNode<?>> {
             this.strategy = strategy;
             this.rules = Arrays.asList(rules);
         }
+
+        public Batch(String name, Strategy strategy, Object... rules) {
+            this.name = name;
+            this.strategy = strategy;
+            this.rules = convertRules(rules);
+        }
+
+        private List<Rule<?>> convertRules(Object... rules) {
+            List<Rule<?>> convertedRules = new ArrayList<>();
+            for (Object rule : rules) {
+                if (rule instanceof Rule) {
+                    convertedRules.add((Rule<?>) rule);
+                } else if (rule instanceof Collection c) {
+                    convertedRules.addAll(c);
+                }
+            }
+            return convertedRules;
+        }
     }
 
     /**
