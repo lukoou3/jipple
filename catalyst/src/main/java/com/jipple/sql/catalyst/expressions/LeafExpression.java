@@ -5,6 +5,11 @@ import java.util.function.Function;
 
 public abstract class LeafExpression extends Expression {
     @Override
+    public Object[] args() {
+        return new Object[0];
+    }
+
+    @Override
     public final List<Expression> children() {
         return List.of();
     }

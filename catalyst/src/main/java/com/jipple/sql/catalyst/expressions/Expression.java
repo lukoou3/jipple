@@ -53,6 +53,10 @@ public abstract class Expression extends TreeNode<Expression> {
     /** Returns the result of evaluating this expression on a given input Row */
     public abstract Object eval(InternalRow input);
 
+    public Object eval() {
+        return eval(null);
+    }
+
     public boolean resolved() {
         if (_resolved == null) {
             _resolved = childrenResolved() && checkInputDataTypes().isSuccess();

@@ -8,7 +8,7 @@ import com.jipple.unsafe.types.UTF8String;
 
 import java.util.function.Function;
 
-public class Cast extends UnaryExpression implements TimeZoneAwareExpression<Cast> {
+public class Cast extends UnaryExpression implements TimeZoneAwareExpression {
     public final DataType dataType;
     public final Option<String> timeZoneId;
     private transient Function<Object, Object> _cast;

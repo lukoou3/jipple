@@ -1,6 +1,7 @@
 package com.jipple.sql.catalyst.rules;
 
 import com.jipple.sql.AnalysisException;
+import com.jipple.sql.SQLConf;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.expressions.Resolver;
 import com.jipple.sql.catalyst.trees.TreeNode;
@@ -20,6 +21,14 @@ public abstract class Rule<TreeType extends TreeNode>   {
     private String initialRuleName() {
         String className = getClass().getName();
         return className.endsWith("$") ? className.substring(0, className.length() - 1) : className;
+    }
+
+    /**
+     * The active config object within the current scope.
+     * See [[SQLConf.get]] for more information.
+     */
+    protected SQLConf conf(){
+        return SQLConf.get();
     }
 
     protected Resolver resolver() {

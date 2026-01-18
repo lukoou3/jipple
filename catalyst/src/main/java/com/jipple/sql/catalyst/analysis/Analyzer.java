@@ -52,6 +52,7 @@ public class Analyzer extends RuleExecutor<LogicalPlan> {
                         new ResolveReferences(),
                         new ResolveAliases(),
                         new ResolveFunctions(functionRegistry),
+                        new ResolveTimeZone(),
                         TypeCoercion.typeCoercionRules()
                 )
         );
