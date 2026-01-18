@@ -526,6 +526,13 @@ public final class Decimal implements Comparable<Decimal>, Serializable {
 
     public static final long[] POW_10 = new long[MAX_LONG_DIGITS + 1];
 
+    // MathContext：精度 +1 并向下取整，避免双重 HALF_UP 误差。
+    private static final MathContext MATH_CONTEXT = new MathContext(MAX_DECIMAL_PRECISION + 1, RoundingMode.DOWN);
+
+    public static final Decimal ZERO = new Decimal(0);
+    public static final Decimal ONE = new Decimal(1);
+
+
     static {
         for (int i = 0; i <= MAX_LONG_DIGITS; i++) {
             POW_10[i] = (long) Math.pow(10, i);
@@ -547,13 +554,6 @@ public final class Decimal implements Comparable<Decimal>, Serializable {
         return "Decimal(" + precision + "," + scale + ")";
     }
 
-    // MathContext：精度 +1 并向下取整，避免双重 HALF_UP 误差。
-    private static final MathContext MATH_CONTEXT =
-            new MathContext(MAX_DECIMAL_PRECISION + 1, RoundingMode.DOWN);
-
-    static final Decimal ZERO = new Decimal(0);
-    static final Decimal ONE = new Decimal(1);
-    
     /** RowEncoder 等外部行支持。 */
     public static Decimal fromDecimal(Object value) {
         if (value instanceof BigDecimal) return new Decimal((BigDecimal) value);

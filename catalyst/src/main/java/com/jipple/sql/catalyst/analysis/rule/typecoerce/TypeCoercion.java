@@ -1,6 +1,7 @@
 package com.jipple.sql.catalyst.analysis.rule.typecoerce;
 
 import com.jipple.collection.Option;
+import com.jipple.sql.SQLConf;
 import com.jipple.sql.catalyst.expressions.Cast;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.expressions.Resolver;
@@ -28,6 +29,11 @@ public final class TypeCoercion {
                 new ImplicitTypeCasts(),
                 new IfCoercion(),
                 new InConversion(),
+                new PromoteStrings(),
+                new ConcatCoercion(),
+                new CaseWhenCoercion(),
+                new IntegralDivision(),
+                new BooleanEquality(),
         };
         return List.of(rules);
     }
@@ -167,6 +173,65 @@ public final class TypeCoercion {
         } else {
             return expr;
         }
+    }
+
+    // Return whether a string literal can be promoted as the given data type in a binary comparison.
+    private static boolean canPromoteAsInBinaryComparison(DataType dataType) {
+        // There is no need to add `Cast` for comparison between strings.
+        if (dataType instanceof StringType) {
+            return false;
+        }
+        return dataType instanceof AtomicType;
+    }
+
+    /**
+     * This function determines the target type of a comparison operator when one operand
+     * is a String and the other is not. It also handles when one op is a Date and the
+     * other is a Timestamp by making the target type to be String.
+     */
+    public static Option<DataType> findCommonTypeForBinaryComparison(DataType dt1,  DataType dt2,  SQLConf conf) {
+        if (dt1 instanceof StringType && dt2 instanceof DateType) {
+            return Option.some(conf.castDatetimeToString() ? STRING : DATE);
+        }
+        if (dt1 instanceof DateType && dt2 instanceof StringType) {
+            return Option.some(conf.castDatetimeToString() ? STRING : DATE);
+        }
+        if (dt1 instanceof StringType && dt2 instanceof TimestampType) {
+            return Option.some(conf.castDatetimeToString() ? STRING : TIMESTAMP);
+        }
+        if (dt1 instanceof TimestampType && dt2 instanceof StringType) {
+            return Option.some(conf.castDatetimeToString() ? STRING : TIMESTAMP);
+        }
+        if (dt1 instanceof StringType && dt2 instanceof NullType) {
+            return Option.some(STRING);
+        }
+        if (dt1 instanceof NullType && dt2 instanceof StringType) {
+            return Option.some(STRING);
+        }
+
+        // Cast to TimestampType when we compare DateType with TimestampType
+        if (dt1 instanceof TimestampType && dt2 instanceof DateType) {
+            return Option.some(TIMESTAMP);
+        }
+        if (dt1 instanceof DateType && dt2 instanceof TimestampType) {
+            return Option.some(TIMESTAMP);
+        }
+
+        // There is no proper decimal type we can pick, using double type is the best we can do.
+        if (dt1 instanceof DecimalType && dt2 instanceof StringType) {
+            return Option.some(DOUBLE);
+        }
+        if (dt1 instanceof StringType && dt2 instanceof DecimalType) {
+            return Option.some(DOUBLE);
+        }
+
+        if (dt1 instanceof StringType && dt2 instanceof AtomicType && canPromoteAsInBinaryComparison(dt2)) {
+            return Option.some(dt2);
+        }
+        if (dt1 instanceof AtomicType && dt2 instanceof StringType && canPromoteAsInBinaryComparison(dt1)) {
+            return Option.some(dt1);
+        }
+        return Option.none();
     }
 
     public static Option<DataType> findWiderTypeForTwo(DataType t1, DataType t2) {
