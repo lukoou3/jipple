@@ -3,12 +3,16 @@ package com.jipple.sql.catalyst.analysis.rule.typecoerce;
 import com.jipple.collection.Option;
 import com.jipple.sql.catalyst.expressions.Cast;
 import com.jipple.sql.catalyst.expressions.Expression;
+import com.jipple.sql.catalyst.expressions.Resolver;
 import com.jipple.sql.catalyst.plans.logical.LogicalPlan;
 import com.jipple.sql.catalyst.rules.Rule;
 import com.jipple.sql.catalyst.types.DataTypeUtils;
 import com.jipple.sql.types.*;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.function.BiFunction;
 
 import static com.jipple.sql.types.DataTypes.*;
 
@@ -20,11 +24,65 @@ public final class TypeCoercion {
     private static final List<NumericType> numericPrecedence = List.of(INTEGER, LONG,FLOAT,DOUBLE);
 
     public static List<Rule<LogicalPlan>> typeCoercionRules() {
-        return List.of(
-            new ImplicitTypeCasts()
-        );
+        Rule<LogicalPlan>[] rules = new Rule[]{
+                new ImplicitTypeCasts(),
+                new IfCoercion(),
+                new InConversion(),
+        };
+        return List.of(rules);
     }
 
+    public static boolean canCast(DataType from, DataType to) {
+        return Cast.canCast(from, to);
+    }
+
+    public static Option<DataType> findTypeForComplex(
+            DataType t1,
+            DataType t2,
+            BiFunction<DataType, DataType, Option<DataType>> findTypeFunc) {
+        if (t1 instanceof ArrayType a1 && t2 instanceof ArrayType a2) {
+            return findTypeFunc.apply(a1.elementType, a2.elementType).map(et ->
+                    new ArrayType(
+                            et,
+                            a1.containsNull || a2.containsNull
+                                    || Cast.forceNullable(a1.elementType, et)
+                                    || Cast.forceNullable(a2.elementType, et)));
+        }
+        if (t1 instanceof MapType m1 && t2 instanceof MapType m2) {
+            return findTypeFunc.apply(m1.keyType, m2.keyType)
+                    .filter(kt -> !Cast.forceNullable(m1.keyType, kt) && !Cast.forceNullable(m2.keyType, kt))
+                    .flatMap(kt -> findTypeFunc.apply(m1.valueType, m2.valueType)
+                    .map(vt -> new MapType(kt, vt,m1.valueContainsNull || m2.valueContainsNull
+                                            || Cast.forceNullable(m1.valueType, vt)
+                                            || Cast.forceNullable(m2.valueType, vt))
+                    ));
+        }
+        if (t1 instanceof StructType s1
+                && t2 instanceof StructType s2
+                && s1.fields.length == s2.fields.length) {
+            Resolver resolver = Resolver.caseSensitiveResolution();
+            ArrayList<StructField> fields = new ArrayList<>(s1.fields.length);
+            for (int i = 0; i < s1.fields.length; i++) {
+                StructField field1 = s1.fields[i];
+                StructField field2 = s2.fields[i];
+                if (!resolver.resolve(field1.name, field2.name)) {
+                    return Option.none();
+                }
+                Option<DataType> dataType = findTypeFunc.apply(field1.dataType, field2.dataType);
+                if (dataType.isEmpty()) {
+                    return Option.none();
+                }
+                DataType dt = dataType.get();
+                boolean nullable = field1.nullable
+                        || field2.nullable
+                        || Cast.forceNullable(field1.dataType, dt)
+                        || Cast.forceNullable(field2.dataType, dt);
+                fields.add(new StructField(field1.name, dt, nullable));
+            }
+            return Option.some(new StructType(fields.toArray(new StructField[0])));
+        }
+        return Option.none();
+    }
 
     public static Option<DataType> findTightestCommonType(DataType t1, DataType t2) {
         if (t1.equals(t2)) {
@@ -95,6 +153,61 @@ public final class TypeCoercion {
         }
     }
 
+    public static Expression castIfNotSameType(Expression expr, DataType dt) {
+        if (!expr.dataType().sameType(dt)) {
+            return new Cast(expr, dt);
+        } else {
+            return expr;
+        }
+    }
+
+    public static Expression castIfNotEquals(Expression expr, DataType dt) {
+        if (!expr.dataType().equals(dt)) {
+            return new Cast(expr, dt);
+        } else {
+            return expr;
+        }
+    }
+
+    public static Option<DataType> findWiderTypeForTwo(DataType t1, DataType t2) {
+        return findTightestCommonType(t1, t2);
+    }
+
+    public static Option<DataType> findWiderCommonType(List<DataType> types) {
+        LinkedHashSet<DataType> stringTypes = new LinkedHashSet<>();
+        LinkedHashSet<DataType> nonStringTypes = new LinkedHashSet<>();
+        for (DataType type : types) {
+            if (hasStringType(type)) {
+                stringTypes.add(type);
+            } else {
+                nonStringTypes.add(type);
+            }
+        }
+        LinkedHashSet<DataType> orderedTypes = new LinkedHashSet<>();
+        orderedTypes.addAll(stringTypes);
+        orderedTypes.addAll(nonStringTypes);
+        Option<DataType> result = Option.some(NULL);
+        for (DataType type : orderedTypes) {
+            if (result.isEmpty()) {
+                return Option.none();
+            }
+            result = findWiderTypeForTwo(result.get(), type);
+        }
+        return result;
+    }
+
+    /**
+     * Whether the data type contains StringType.
+     */
+    public static boolean hasStringType(DataType dataType) {
+        if (dataType instanceof StringType) {
+            return true;
+        }
+        if (dataType instanceof ArrayType arrayType) {
+            return hasStringType(arrayType.elementType);
+        }
+        return false;
+    }
 
     public static Option<Expression> implicitCast(Expression expression, AbstractDataType expectedType) {
         return implicitCast(expression.dataType(), expectedType).map(dataType -> {
@@ -160,5 +273,19 @@ public final class TypeCoercion {
         }
         return Option.option(ret);
     }
+
+    /**
+     * The method finds a common type for data types that differ only in nullable flags, including
+     * `nullable`, `containsNull` of [[ArrayType]] and `valueContainsNull` of [[MapType]].
+     * If the input types are different besides nullable flags, None is returned.
+     */
+    public static Option<DataType> findCommonTypeDifferentOnlyInNullFlags(DataType t1, DataType t2) {
+        if (t1.equals(t2)) {
+            return Option.some(t1);
+        } else {
+            return findTypeForComplex(t1, t2, TypeCoercion::findCommonTypeDifferentOnlyInNullFlags);
+        }
+    }
+
 
 }

@@ -1,5 +1,6 @@
 package com.jipple.sql.catalyst.expressions.predicate;
 
+import com.google.common.base.Preconditions;
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
 import com.jipple.sql.catalyst.expressions.Expression;
@@ -10,6 +11,7 @@ import com.jipple.sql.types.DataType;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static com.jipple.sql.types.DataTypes.BOOLEAN;
@@ -20,6 +22,7 @@ public class In extends Expression {
     Comparator<Object> _comparator;
 
     public In(Expression value, List<Expression> list) {
+        Preconditions.checkArgument(list != null, "list should not be null");
         this.value = value;
         this.list = list;
     }
@@ -54,13 +57,13 @@ public class In extends Expression {
 
     @Override
     public TypeCheckResult checkInputDataTypes() {
-        for (Expression l : list) {
-            if(!l.dataType().equals(value.dataType())){
-                return TypeCheckResult.typeCheckFailure(String.format("Arguments must be same type but were: %s != %s", l.dataType(), value.dataType()));
-            }
+        boolean mismatchOpt = list.stream().anyMatch(l -> !DataType.equalsStructurally(l.dataType(), value.dataType(),  true));
+        if (mismatchOpt) {
+            return TypeCheckResult.dataTypeMismatch("DATA_DIFF_TYPES",
+                    Map.of("functionName", prettyName(), "dataType", children().stream().map(child -> child.dataType().simpleString()).collect(Collectors.joining("[", ", ", "]"))));
         }
         if(!(value.dataType() instanceof AtomicType)){
-            return TypeCheckResult.typeCheckFailure("not support type:" + value.dataType());
+            return TypeCheckResult.typeCheckFailure("not support order type:" + value.dataType());
         }
         return TypeCheckResult.typeCheckSuccess();
     }

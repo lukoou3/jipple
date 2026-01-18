@@ -2,6 +2,7 @@ package com.jipple.sql.catalyst.expressions.collection;
 
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
+import com.jipple.sql.catalyst.expressions.ComplexTypeMergingExpression;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.types.DataType;
 import com.jipple.unsafe.types.UTF8String;
@@ -10,7 +11,7 @@ import java.util.List;
 
 import static com.jipple.sql.types.DataTypes.STRING;
 
-public class Concat extends Expression {
+public class Concat extends ComplexTypeMergingExpression {
     private final List<Expression> children;
     private final UTF8String[] inputs;
     public Concat(List<Expression> children) {
@@ -34,8 +35,13 @@ public class Concat extends Expression {
     }
 
     @Override
+    public boolean foldable() {
+        return children.stream().allMatch(Expression::foldable);
+    }
+
+    @Override
     public DataType dataType() {
-        return children.isEmpty() ? STRING : children.get(0).dataType();
+        return children.isEmpty() ? STRING : super.dataType();
     }
 
     @Override

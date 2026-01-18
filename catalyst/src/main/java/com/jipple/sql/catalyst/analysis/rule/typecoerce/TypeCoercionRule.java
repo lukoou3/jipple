@@ -1,5 +1,6 @@
 package com.jipple.sql.catalyst.analysis.rule.typecoerce;
 
+import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.expressions.named.Attribute;
 import com.jipple.sql.catalyst.expressions.named.AttributeReference;
 import com.jipple.sql.catalyst.expressions.named.ExprId;
@@ -12,7 +13,7 @@ import java.util.stream.Collectors;
 public abstract class TypeCoercionRule extends Rule<LogicalPlan> {
     @Override
     public LogicalPlan apply(LogicalPlan plan) {
-        LogicalPlan newPlan = coerceTypes(plan);
+        LogicalPlan newPlan = plan.resolveExpressionsUp(this::transform);
         if (plan.fastEquals(newPlan)) {
             return plan;
         } else {
@@ -20,7 +21,7 @@ public abstract class TypeCoercionRule extends Rule<LogicalPlan> {
         }
     }
 
-    public abstract LogicalPlan coerceTypes(LogicalPlan plan);
+    public abstract Expression transform(Expression e);
 
     private LogicalPlan propagateTypes(LogicalPlan plan) {
         return plan.transformUp(p -> {

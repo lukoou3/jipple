@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.NoSuchElementException;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 public abstract class Option<A> implements Serializable {
@@ -62,6 +63,22 @@ public abstract class Option<A> implements Serializable {
             return NONE;
         } else {
             return new Some<>(f.apply(get()));
+        }
+    }
+
+    public final Option<A> filter(Predicate<? super A> p) {
+        if (isEmpty() || p.test(get())) {
+            return this;
+        } else {
+            return NONE;
+        }
+    }
+
+    public final <B> Option<B> flatMap(Function<? super A, ? extends Option<B>> f) {
+        if (isEmpty()) {
+            return NONE;
+        } else {
+            return f.apply(get());
         }
     }
 

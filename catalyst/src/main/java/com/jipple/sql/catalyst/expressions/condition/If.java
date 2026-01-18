@@ -2,6 +2,8 @@ package com.jipple.sql.catalyst.expressions.condition;
 
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
+import com.jipple.sql.catalyst.analysis.rule.typecoerce.TypeCoercion;
+import com.jipple.sql.catalyst.expressions.ComplexTypeMergingExpression;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.types.DataType;
 
@@ -9,7 +11,7 @@ import java.util.List;
 
 import static com.jipple.sql.types.DataTypes.BOOLEAN;
 
-public class If extends Expression {
+public class If extends ComplexTypeMergingExpression {
     public final Expression predicate;
     public final Expression trueValue;
     public final Expression falseValue;
@@ -31,20 +33,20 @@ public class If extends Expression {
     }
 
     @Override
-    public boolean nullable() {
-        return trueValue.nullable() || falseValue.nullable();
+    public List<DataType> inputTypesForMerging() {
+        return List.of(trueValue.dataType(), falseValue.dataType());
     }
 
     @Override
-    public DataType dataType() {
-        return trueValue.dataType();
+    public boolean nullable() {
+        return trueValue.nullable() || falseValue.nullable();
     }
 
     @Override
     public TypeCheckResult checkInputDataTypes() {
         if (!predicate.dataType().equals(BOOLEAN)) {
             return TypeCheckResult.typeCheckFailure("type of predicate expression in If should be boolean");
-        } else if (!trueValue.dataType().equals(falseValue.dataType())) {
+        } else if (!TypeCoercion.haveSameType(inputTypesForMerging())) {
             return TypeCheckResult.typeCheckFailure(String.format("differing types:%s and %s", trueValue.dataType(), falseValue.dataType()));
         } else {
             return TypeCheckResult.typeCheckSuccess();

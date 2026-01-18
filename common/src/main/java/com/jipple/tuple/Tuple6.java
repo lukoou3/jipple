@@ -103,4 +103,9 @@ public final class Tuple6<T1, T2, T3, T4, T5, T6> extends Tuple {
         result = 31 * result + ((_6 != null) ? _6.hashCode() : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "(" + _1 + "," + _2 + "," + _3 + "," + _4 + "," + _5 + "," + _6 + ")";
+    }
 }

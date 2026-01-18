@@ -66,4 +66,8 @@ public final class Tuple2<T1, T2> extends Tuple {
         return result;
     }
 
+    @Override
+    public String toString() {
+        return "(" + _1 + "," + _2 + ")";
+    }
 }

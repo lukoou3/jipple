@@ -84,6 +84,7 @@ public abstract class Expression extends TreeNode<Expression> {
      * This should usually match the name of the function in SQL.
      */
     public String prettyName() {
+        // getTagValue(FunctionRegistry.FUNC_ALIAS).getOrElse(nodeName.toLowerCase(Locale.ROOT))
         return nodeName().toLowerCase();
     }
 
