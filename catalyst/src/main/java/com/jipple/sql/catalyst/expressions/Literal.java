@@ -2,6 +2,7 @@ package com.jipple.sql.catalyst.expressions;
 
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.types.*;
+import com.jipple.unsafe.types.UTF8String;
 
 import static com.jipple.sql.types.DataTypes.*;
 
@@ -63,7 +64,7 @@ public class Literal extends LeafExpression {
         } else if (dataType instanceof DoubleType) {
             return v instanceof Double;
         } else if (dataType instanceof StringType) {
-            return v instanceof String;
+            return v instanceof UTF8String;
         }
 
         return false;
@@ -81,7 +82,9 @@ public class Literal extends LeafExpression {
             return of(v, DataTypes.LONG);
         } else if (v instanceof Double) {
             return of(v, DataTypes.DOUBLE);
-        } else if (v instanceof String) {
+        } else if (v instanceof String s) {
+            return of(UTF8String.fromString(s), DataTypes.STRING);
+        }  else if (v instanceof UTF8String) {
             return of(v, DataTypes.STRING);
         } else if (v instanceof Boolean) {
             return of(v, DataTypes.BOOLEAN);

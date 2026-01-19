@@ -11,6 +11,10 @@ public class TypeCollection extends AbstractDataType {
         this.types = types;
     }
 
+    public static TypeCollection of(AbstractDataType... types) {
+        return new TypeCollection(List.of(types));
+    }
+
     @Override
     public DataType defaultConcreteType() {
         return types.get(0).defaultConcreteType();

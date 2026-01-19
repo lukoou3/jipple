@@ -30,6 +30,11 @@ public class FromUnixTime extends TimestampFormatterHelper {
     }
 
     @Override
+    public Object[] args() {
+        return new Object[] { sec, format, timeZoneId };
+    }
+
+    @Override
     public Option<String> timeZoneId() {
         return timeZoneId;
     }
@@ -55,15 +60,24 @@ public class FromUnixTime extends TimestampFormatterHelper {
     }
 
     @Override
+    public String prettyName() {
+        return "from_unixtime";
+    }
+
+    @Override
     public Option<List<AbstractDataType>> expectsInputTypes() {
         return Option.some(List.of(LONG, STRING));
     }
 
     @Override
     protected Object nullSafeEval(Object seconds, Object format) {
-        Option<TimestampFormatter> timestampFormatterOption = formatterOption();
-        TimestampFormatter fmt = timestampFormatterOption.isDefined() ? timestampFormatterOption.get() : getFormatter(format.toString());
-        return UTF8String.fromString(fmt.format((Long) seconds * MICROS_PER_SECOND));
+        try {
+            Option<TimestampFormatter> timestampFormatterOption = formatterOption();
+            TimestampFormatter fmt = timestampFormatterOption.isDefined() ? timestampFormatterOption.get() : getFormatter(format.toString());
+            return UTF8String.fromString(fmt.format((Long) seconds * MICROS_PER_SECOND));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Override

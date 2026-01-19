@@ -4,6 +4,7 @@ import com.jipple.error.JippleException;
 import com.jipple.sql.catalyst.QueryPlanningTracker;
 import com.jipple.sql.catalyst.analysis.Analyzer;
 import com.jipple.sql.catalyst.analysis.SimpleFunctionRegistry;
+import com.jipple.sql.catalyst.optimizer.Optimizer;
 import com.jipple.sql.catalyst.plans.logical.LogicalPlan;
 
 import java.util.Map;
@@ -22,6 +23,7 @@ public class QueryExecution {
     public final LogicalPlan logical;
     public final QueryPlanningTracker tracker;
     public final Analyzer analyzer;
+    public final Optimizer optimizer;
 
     public QueryExecution(Map<String, LogicalPlan> tempViews, SimpleFunctionRegistry functionRegistry, LogicalPlan logical) {
         this(tempViews, functionRegistry, logical, new QueryPlanningTracker());
@@ -33,9 +35,11 @@ public class QueryExecution {
         this.logical = logical;
         this.tracker = tracker;
         this.analyzer = new Analyzer(tempViews, functionRegistry);
+        this.optimizer = new Optimizer();
     }
 
     private LogicalPlan _analyzed;
+    private LogicalPlan _optimizedPlan;
 
     public void resetAnalyzed() {
         analyzed();
@@ -51,6 +55,22 @@ public class QueryExecution {
             return plan;
         }
         return _analyzed;
+    }
+
+    // optimizer 阶段
+    public LogicalPlan optimizedPlan() {
+        if (_optimizedPlan == null) {
+            LogicalPlan plan = executePhase(QueryPlanningTracker.OPTIMIZATION, () ->
+                    optimizer.executeAndTrack(analyzed(), tracker)
+            );
+            plan.setAnalyzed();
+            return plan;
+        }
+        return _optimizedPlan;
+    }
+
+    public void assertOptimized() {
+        optimizedPlan();
     }
 
     protected <T> T executePhase(String phase, Supplier<T> block) {

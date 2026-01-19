@@ -88,6 +88,14 @@ public abstract class QueryPlan<PlanType extends QueryPlan<PlanType>> extends Tr
     }
 
     /**
+     * Returns the result of running [[transformExpressions]] on this node
+     * and all its children. Note that this method skips expressions inside subqueries.
+     */
+    public final PlanType transformAllExpressions(Function<Expression, Expression> rule) {
+        return transformUp(p -> p.transformExpressionsUp(rule));
+    }
+
+    /**
      * Apply a map function to each expression present in this query operator, and return a new
      * query operator based on the mapped expressions.
      */

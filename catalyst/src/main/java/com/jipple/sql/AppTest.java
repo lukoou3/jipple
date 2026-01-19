@@ -1,10 +1,15 @@
 package com.jipple.sql;
 
+import com.jipple.sql.catalyst.analysis.FunctionRegistry;
 import com.jipple.sql.catalyst.parser.CatalystSqlParser;
 import com.jipple.sql.catalyst.plans.logical.LogicalPlan;
+import com.jipple.sql.catalyst.plans.logical.RelationPlaceholder;
 import com.jipple.sql.catalyst.util.TypeUtils;
+import com.jipple.sql.execution.QueryExecution;
+import com.jipple.sql.types.StructType;
 
 import java.util.Comparator;
+import java.util.Map;
 
 import static com.jipple.sql.types.DataTypes.INTEGER;
 
@@ -12,14 +17,24 @@ public class AppTest {
 
     public static void main(String[] args) {
         var parser = CatalystSqlParser.getInstance();
-        var expr = parser.parseExpression("a");
-        System.out.println(expr);
-        var exprs = parser.parseExpressions("a, b");
-        System.out.println(exprs);
-        var plan = parser.parsePlan("select a, b, 1 c, 2, nvl(d, 0) d, 1 + 2 e");
+        StructType structType = (StructType) parser.parseDataType("struct<a:int, b:string, c:string, x: bigint>");
+        var plan = parser.parsePlan("""
+        select
+            a + 1L,
+            a is null a,
+            b like 'a' b,
+            b not like 'a' c,
+            cast(c as int) d,
+            substr(c, 1, 3) e,
+            nvl(c, '') f
+        from tbl where x > 10        
+        """);
+        var queryExecution = new QueryExecution(Map.of("tbl", new RelationPlaceholder(structType.toAttributes(), "tbl")), FunctionRegistry.builtin.clone(), plan);
+        var analyzed = queryExecution.analyzed();
+        var optimized = queryExecution.optimizedPlan();
         System.out.println(plan);
-        plan = parser.parsePlan("select x is null a, x like 'a' b, x not like 'a' c, cast(a as int) d, cast(a as array<int>) e, cast(a as struct<a:int, b:string>) f from tab where x > 10");
-        System.out.println(plan);
+        System.out.println(analyzed);
+        System.out.println(optimized);
     }
 
 }

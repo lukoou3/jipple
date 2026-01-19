@@ -27,9 +27,11 @@ public final class FunctionRegistry {
         Map<String, Tuple2<ExpressionInfo, FunctionBuilder<Expression>>> map = new LinkedHashMap<>();
         @SuppressWarnings("unchecked")
         Tuple2<String, Tuple2<ExpressionInfo, FunctionBuilder<Expression>>>[] entries = new Tuple2[]{
+                expression("coalesce", Coalesce.class),
                 expression("if", If.class),
                 expression("isnull", IsNull.class),
                 expression("isnotnull", IsNotNull.class),
+                expression("nvl", Nvl.class),
 
                 expression("+", Add.class),
                 expression("-", Subtract.class),

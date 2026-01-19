@@ -209,12 +209,12 @@ public abstract class RuleExecutor<TreeType extends TreeNode<?>> {
     /**
      * A batch of rules.
      */
-    public static class Batch {
+    public class Batch {
         public final String name;
         public final Strategy strategy;
-        public final List<Rule<?>> rules;
+        public final List<Rule<TreeType>> rules;
 
-        public Batch(String name, Strategy strategy, Rule<?>... rules) {
+        public Batch(String name, Strategy strategy, Rule<TreeType>... rules) {
             this.name = name;
             this.strategy = strategy;
             this.rules = Arrays.asList(rules);
@@ -226,11 +226,11 @@ public abstract class RuleExecutor<TreeType extends TreeNode<?>> {
             this.rules = convertRules(rules);
         }
 
-        private List<Rule<?>> convertRules(Object... rules) {
-            List<Rule<?>> convertedRules = new ArrayList<>();
+        private List<Rule<TreeType>> convertRules(Object... rules) {
+            List<Rule<TreeType>> convertedRules = new ArrayList<>();
             for (Object rule : rules) {
                 if (rule instanceof Rule) {
-                    convertedRules.add((Rule<?>) rule);
+                    convertedRules.add((Rule<TreeType>) rule);
                 } else if (rule instanceof Collection c) {
                     convertedRules.addAll(c);
                 }
