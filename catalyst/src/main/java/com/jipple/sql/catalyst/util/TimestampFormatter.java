@@ -1,5 +1,6 @@
 package com.jipple.sql.catalyst.util;
 
+import java.io.Serializable;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -8,7 +9,7 @@ import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import com.jipple.collection.Option;
 
-public interface TimestampFormatter {
+public interface TimestampFormatter extends Serializable {
     Locale DEFAULT_LOCALE = Locale.US;
 
     /**
@@ -75,6 +76,10 @@ public interface TimestampFormatter {
 
     static String defaultPattern() {
         return "yyyy-MM-dd HH:mm:ss";
+    }
+
+    static TimestampFormatter getFormatter(ZoneId zoneId) {
+        return getFormatter(Option.none(), zoneId, DEFAULT_LOCALE);
     }
 
     static TimestampFormatter getFormatter(Option<String> format, ZoneId zoneId) {

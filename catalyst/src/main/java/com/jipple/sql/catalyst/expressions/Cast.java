@@ -1,17 +1,30 @@
 package com.jipple.sql.catalyst.expressions;
 
 import com.jipple.collection.Option;
+import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
+import com.jipple.sql.catalyst.util.ArrayData;
+import com.jipple.sql.catalyst.util.DateFormatter;
+import com.jipple.sql.catalyst.util.MapData;
+import com.jipple.sql.catalyst.util.TimestampFormatter;
 import com.jipple.sql.errors.QueryExecutionErrors;
 import com.jipple.sql.types.*;
+import com.jipple.unsafe.UTF8StringBuilder;
 import com.jipple.unsafe.types.UTF8String;
 
+import java.time.ZoneOffset;
 import java.util.function.Function;
 
 public class Cast extends UnaryExpression implements TimeZoneAwareExpression {
+    public final static String nullString = "null";
+    public final static String leftBracket = "{";
+    public final static String rightBracket = "}";
     public final DataType dataType;
     public final Option<String> timeZoneId;
     private transient Function<Object, Object> _cast;
+    private transient DateFormatter dateFormatter;
+    private transient TimestampFormatter timestampFormatter;
+    private transient TimestampFormatter timestampNTZFormatter;
 
     public Cast(Expression child, DataType dataType) {
         this(child, dataType, Option.empty());
@@ -73,7 +86,211 @@ public class Cast extends UnaryExpression implements TimeZoneAwareExpression {
     private Function<Object, Object> castToString(DataType from) {
         if (from instanceof StringType) {
             return x -> x;
-        } else {
+        } else if (from instanceof BinaryType) {
+            return x -> UTF8String.fromBytes((byte[]) x);
+        } else if (from instanceof DateType) {
+            return x -> UTF8String.fromString(dateFormatter.format((Integer) x));
+        } else if (from instanceof TimestampType) {
+            return x -> UTF8String.fromString(timestampFormatter.format((Long) x));
+        } else if (from instanceof TimestampNTZType) {
+            return x -> UTF8String.fromString(timestampNTZFormatter.format((Long) x));
+        } else if (from instanceof ArrayType arrayType) {
+            final Function<Object, Object> toUTF8String = castToString(arrayType.elementType);
+            return x -> {
+                ArrayData array = (ArrayData) x;
+                UTF8StringBuilder builder = new UTF8StringBuilder();
+                builder.append("[");
+                int size = array.numElements();
+                if (size > 0) {
+                    if (array.isNullAt(0)) {
+                        if (!nullString.isEmpty()) {
+                            builder.append(nullString);
+                        }
+                    } else {
+                        builder.append((UTF8String) toUTF8String.apply(array.get(0, arrayType.elementType)));
+                    }
+                    for (int i = 1; i < size; i++) {
+                        builder.append(",");
+                        if (array.isNullAt(i)) {
+                            if (!nullString.isEmpty()) {
+                                builder.append(" " + nullString);
+                            }
+                        } else {
+                            builder.append(" ");
+                            builder.append((UTF8String) toUTF8String.apply(array.get(i, arrayType.elementType)));
+                        }
+                    }
+                }
+                builder.append("]");
+                return builder.build();
+            };
+        } else if (from instanceof MapType mapType) {
+            final Function<Object, Object> keyToUTF8String = castToString(mapType.keyType);
+            final Function<Object, Object> valueToUTF8String = castToString(mapType.valueType);
+            return x -> {
+                MapData map = (MapData) x;
+                UTF8StringBuilder builder = new UTF8StringBuilder();
+                builder.append(leftBracket);
+                int size = map.numElements();
+                if (size > 0) {
+                    ArrayData keyArray = map.keyArray();
+                    ArrayData valueArray = map.valueArray();
+                    builder.append((UTF8String) keyToUTF8String.apply(keyArray.get(0, mapType.keyType)));
+                    builder.append(" ->");
+                    if (valueArray.isNullAt(0)) {
+                        if (!nullString.isEmpty()) {
+                            builder.append(" " + nullString);
+                        }
+                    } else {
+                        builder.append(" ");
+                        builder.append((UTF8String) valueToUTF8String.apply(valueArray.get(0, mapType.valueType)));
+                    }
+                    for (int i = 1; i < size; i++) {
+                        builder.append(", ");
+                        builder.append((UTF8String) keyToUTF8String.apply(keyArray.get(i, mapType.keyType)));
+                        builder.append(" ->");
+                        if (valueArray.isNullAt(i)) {
+                            if (!nullString.isEmpty()) {
+                                builder.append(" " + nullString);
+                            }
+                        } else {
+                            builder.append(" ");
+                            builder.append((UTF8String) valueToUTF8String.apply(valueArray.get(i, mapType.valueType)));
+                        }
+                    }
+                }
+                builder.append(rightBracket);
+                return builder.build();
+            };
+        } else if (from instanceof StructType structType) {
+            final StructField[] fields = structType.fields;
+            final DataType[] dataTypes = new DataType[fields.length];
+            final Function<Object, Object>[] toUTF8StringFuncs = (Function<Object, Object>[]) new Function[fields.length];
+            for (int i = 0; i < fields.length; i++) {
+                dataTypes[i] = fields[i].dataType;
+                toUTF8StringFuncs[i] = castToString(dataTypes[i]);
+            }
+            return x -> {
+                InternalRow row = (InternalRow) x;
+                UTF8StringBuilder builder = new UTF8StringBuilder();
+                builder.append(leftBracket);
+                int size = row.numFields();
+                if (size > 0) {
+                    if (row.isNullAt(0)) {
+                        if (!nullString.isEmpty()) {
+                            builder.append(nullString);
+                        }
+                    } else {
+                        builder.append((UTF8String) toUTF8StringFuncs[0].apply(row.get(0, dataTypes[0])));
+                    }
+                    for (int i = 1; i < size; i++) {
+                        builder.append(",");
+                        if (row.isNullAt(i)) {
+                            if (!nullString.isEmpty()) {
+                                builder.append(" " + nullString);
+                            }
+                        } else {
+                            builder.append(" ");
+                            builder.append((UTF8String) toUTF8StringFuncs[i].apply(row.get(i, dataTypes[i])));
+                        }
+                    }
+                }
+                builder.append(rightBracket);
+                return builder.build();
+            };
+        }
+/*
+    case ArrayType(et, _) =>
+      acceptAny[ArrayData](array => {
+        val builder = new UTF8StringBuilder
+        builder.append("[")
+        if (array.numElements > 0) {
+          val toUTF8String = castToString(et)
+          if (array.isNullAt(0)) {
+            if (nullString.nonEmpty) builder.append(nullString)
+          } else {
+            builder.append(toUTF8String(array.get(0, et)).asInstanceOf[UTF8String])
+          }
+          var i = 1
+          while (i < array.numElements) {
+            builder.append(",")
+            if (array.isNullAt(i)) {
+              if (nullString.nonEmpty) builder.append(" " + nullString)
+            } else {
+              builder.append(" ")
+              builder.append(toUTF8String(array.get(i, et)).asInstanceOf[UTF8String])
+            }
+            i += 1
+          }
+        }
+        builder.append("]")
+        builder.build()
+      })
+    case MapType(kt, vt, _) =>
+      acceptAny[MapData](map => {
+        val builder = new UTF8StringBuilder
+        builder.append(leftBracket)
+        if (map.numElements > 0) {
+          val keyArray = map.keyArray()
+          val valueArray = map.valueArray()
+          val keyToUTF8String = castToString(kt)
+          val valueToUTF8String = castToString(vt)
+          builder.append(keyToUTF8String(keyArray.get(0, kt)).asInstanceOf[UTF8String])
+          builder.append(" ->")
+          if (valueArray.isNullAt(0)) {
+            if (nullString.nonEmpty) builder.append(" " + nullString)
+          } else {
+            builder.append(" ")
+            builder.append(valueToUTF8String(valueArray.get(0, vt)).asInstanceOf[UTF8String])
+          }
+          var i = 1
+          while (i < map.numElements) {
+            builder.append(", ")
+            builder.append(keyToUTF8String(keyArray.get(i, kt)).asInstanceOf[UTF8String])
+            builder.append(" ->")
+            if (valueArray.isNullAt(i)) {
+              if (nullString.nonEmpty) builder.append(" " + nullString)
+            } else {
+              builder.append(" ")
+              builder.append(valueToUTF8String(valueArray.get(i, vt))
+                .asInstanceOf[UTF8String])
+            }
+            i += 1
+          }
+        }
+        builder.append(rightBracket)
+        builder.build()
+      })
+    case StructType(fields) =>
+      acceptAny[InternalRow](row => {
+        val builder = new UTF8StringBuilder
+        builder.append(leftBracket)
+        if (row.numFields > 0) {
+          val st = fields.map(_.dataType)
+          val toUTF8StringFuncs = st.map(castToString)
+          if (row.isNullAt(0)) {
+            if (nullString.nonEmpty) builder.append(nullString)
+          } else {
+            builder.append(toUTF8StringFuncs(0)(row.get(0, st(0))).asInstanceOf[UTF8String])
+          }
+          var i = 1
+          while (i < row.numFields) {
+            builder.append(",")
+            if (row.isNullAt(i)) {
+              if (nullString.nonEmpty) builder.append(" " + nullString)
+            } else {
+              builder.append(" ")
+              builder.append(toUTF8StringFuncs(i)(row.get(i, st(i))).asInstanceOf[UTF8String])
+            }
+            i += 1
+          }
+        }
+        builder.append(rightBracket)
+        builder.build()
+      })
+* */
+
+        else {
             return x -> UTF8String.fromString(x.toString());
         }
     }
@@ -103,6 +320,9 @@ public class Cast extends UnaryExpression implements TimeZoneAwareExpression {
     public Function<Object, Object> cast() {
         if (_cast == null) {
             _cast = castInternal(child.dataType(), dataType);
+            dateFormatter = DateFormatter.getFormatter();
+            timestampFormatter = TimestampFormatter.getFormatter(zoneId());
+            timestampNTZFormatter = TimestampFormatter.getFormatter(ZoneOffset.UTC);
         }
         return _cast;
     }

@@ -1,5 +1,7 @@
 package com.jipple.sql.catalyst.util;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.sql.Timestamp;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -11,10 +13,11 @@ import java.util.Locale;
 import static com.jipple.sql.catalyst.util.DateTimeConstants.MICROS_PER_SECOND;
 
 public class Iso8601TimestampFormatter implements TimestampFormatter {
+    private static final long serialVersionUID = 1L;
     private final String pattern;
     private final ZoneId zoneId;
     private final Locale locale;
-    private final DateTimeFormatter formatter;
+    private transient DateTimeFormatter formatter;
 
     public Iso8601TimestampFormatter(
             String pattern,
@@ -85,6 +88,11 @@ public class Iso8601TimestampFormatter implements TimestampFormatter {
 
     protected DateTimeFormatter formatter() {
         return formatter;
+    }
+
+    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        this.formatter = DateTimeFormatter.ofPattern(pattern, locale);
     }
 
     private static long instantToMicros(Instant instant) {
