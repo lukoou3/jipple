@@ -35,6 +35,11 @@ public class AttributeSeq implements Serializable {
         return new StructType(fields);
     }
 
+    /** Returns all attributes in this sequence. */
+    public List<Attribute> attrs() {
+        return Collections.unmodifiableList(attrs);
+    }
+
     /** Returns the attribute at the given index. */
     public Attribute apply(int ordinal) {
         return attrsArray()[ordinal];
