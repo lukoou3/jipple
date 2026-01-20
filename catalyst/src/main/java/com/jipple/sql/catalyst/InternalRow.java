@@ -1,7 +1,10 @@
 package com.jipple.sql.catalyst;
 
 import com.jipple.sql.catalyst.expressions.SpecializedGetters;
+import com.jipple.sql.catalyst.util.ArrayData;
+import com.jipple.sql.catalyst.util.MapData;
 import com.jipple.unsafe.types.CalendarInterval;
+import com.jipple.unsafe.types.UTF8String;
 
 import java.io.Serializable;
 
@@ -79,4 +82,20 @@ public abstract class InternalRow implements SpecializedGetters, Serializable {
         return false;
     }
 
+    /**
+     * Copies the given value if it's string/struct/array/map type.
+     */
+    public static Object copyValue(Object value) {
+        if (value instanceof UTF8String) {
+            return ((UTF8String) value).copy();
+        } else if (value instanceof InternalRow) {
+            return ((InternalRow) value).copy();
+        } else if (value instanceof ArrayData) {
+            return ((ArrayData) value).copy();
+        } else if (value instanceof MapData) {
+            return ((MapData) value).copy();
+        } else {
+            return value;
+        }
+    }
 }

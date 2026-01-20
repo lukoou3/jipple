@@ -41,7 +41,7 @@ public class QueryExecution {
     private LogicalPlan _analyzed;
     private LogicalPlan _optimizedPlan;
 
-    public void resetAnalyzed() {
+    public void assertAnalyzed() {
         analyzed();
     }
 

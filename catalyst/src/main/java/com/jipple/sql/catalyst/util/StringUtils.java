@@ -1,8 +1,53 @@
 package com.jipple.sql.catalyst.util;
 
+import com.jipple.unsafe.types.UTF8String;
+
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class StringUtils {
+
+    /**
+     * Set of UTF8String values that represent true.
+     * Includes: "t", "true", "y", "yes", "1"
+     */
+    private static final Set<UTF8String> trueStrings = Stream.of("t", "true", "y", "yes", "1")
+            .map(UTF8String::fromString)
+            .collect(Collectors.toCollection(HashSet::new));
+
+    /**
+     * Set of UTF8String values that represent false.
+     * Includes: "f", "false", "n", "no", "0"
+     */
+    private static final Set<UTF8String> falseStrings = Stream.of("f", "false", "n", "no", "0")
+            .map(UTF8String::fromString)
+            .collect(Collectors.toCollection(HashSet::new));
+
+    /**
+     * Checks if the given UTF8String represents a true value.
+     * The string is trimmed and converted to lowercase before checking.
+     * 
+     * @param s the UTF8String to check
+     * @return true if the string represents a true value, false otherwise
+     */
+    public static boolean isTrueString(UTF8String s) {
+        return trueStrings.contains(s.trimAll().toLowerCase());
+    }
+
+    /**
+     * Checks if the given UTF8String represents a false value.
+     * The string is trimmed and converted to lowercase before checking.
+     * 
+     * @param s the UTF8String to check
+     * @return true if the string represents a false value, false otherwise
+     */
+    public static boolean isFalseString(UTF8String s) {
+        return falseStrings.contains(s.trimAll().toLowerCase());
+    }
+
 
     /**
      * Validate and convert SQL 'like' pattern to a Java regular expression.

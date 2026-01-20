@@ -309,7 +309,7 @@ public final class Decimal implements Comparable<Decimal>, Serializable {
     /**
      * 调整为指定精度与 scale。
      */
-    Decimal toPrecision(int precision, int scale,
+    public Decimal toPrecision(int precision, int scale,
                         RoundingMode roundMode,
                         boolean nullOnOverflow) {
         Decimal copy = this.clone();
