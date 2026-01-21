@@ -73,11 +73,11 @@ public class CatalystTypeConverters {
     /**
      * Converts a Java type to its Catalyst equivalent (and vice versa).
      *
-     * @param <ScalaInputType> The type of Java values that can be converted to Catalyst.
-     * @param <ScalaOutputType> The type of Java values returned when converting Catalyst to Java.
+     * @param <JavaInputType> The type of Java values that can be converted to Catalyst.
+     * @param <JavaOutputType> The type of Java values returned when converting Catalyst to Java.
      * @param <CatalystType> The internal Catalyst type used to represent values of this Java type.
      */
-    private abstract static class CatalystTypeConverter<ScalaInputType, ScalaOutputType, CatalystType>
+    private abstract static class CatalystTypeConverter<JavaInputType, JavaOutputType, CatalystType>
             implements Serializable {
 
         /**
@@ -88,36 +88,36 @@ public class CatalystTypeConverters {
             if (maybeScalaValue == null) {
                 return null;
             }
-            return toCatalystImpl((ScalaInputType) maybeScalaValue);
+            return toCatalystImpl((JavaInputType) maybeScalaValue);
         }
 
         /**
          * Given a Catalyst row, convert the value at column `column` to its Java equivalent.
          */
-        final ScalaOutputType toScala(InternalRow row, int column) {
+        final JavaOutputType toJava(InternalRow row, int column) {
             if (row.isNullAt(column)) {
                 return null;
             }
-            return toScalaImpl(row, column);
+            return toJavaImpl(row, column);
         }
 
         /**
          * Convert a Catalyst value to its Java equivalent.
          */
-        abstract ScalaOutputType toScala(@Nullable CatalystType catalystValue);
+        abstract JavaOutputType toJava(@Nullable CatalystType catalystValue);
 
         /**
          * Converts a Java value to its Catalyst equivalent.
-         * @param scalaValue the Java value, guaranteed not to be null.
+         * @param javaValue the Java value, guaranteed not to be null.
          * @return the Catalyst value.
          */
-        protected abstract CatalystType toCatalystImpl(ScalaInputType scalaValue);
+        protected abstract CatalystType toCatalystImpl(JavaInputType javaValue);
 
         /**
          * Given a Catalyst row, convert the value at column `column` to its Java equivalent.
          * This method will only be called on non-null columns.
          */
-        protected abstract ScalaOutputType toScalaImpl(InternalRow row, int column);
+        protected abstract JavaOutputType toJavaImpl(InternalRow row, int column);
     }
 
     private static class IdentityConverter extends CatalystTypeConverter<Object, Object, Object> {
@@ -128,17 +128,17 @@ public class CatalystTypeConverters {
         }
 
         @Override
-        protected Object toCatalystImpl(Object scalaValue) {
-            return scalaValue;
+        protected Object toCatalystImpl(Object javaValue) {
+            return javaValue;
         }
 
         @Override
-        public Object toScala(Object catalystValue) {
+        public Object toJava(Object catalystValue) {
             return catalystValue;
         }
 
         @Override
-        protected Object toScalaImpl(InternalRow row, int column) {
+        protected Object toJavaImpl(InternalRow row, int column) {
             return row.get(column, dataType);
         }
     }
@@ -154,23 +154,23 @@ public class CatalystTypeConverters {
         }
 
         @Override
-        protected ArrayData toCatalystImpl(Object scalaValue) {
-            if (scalaValue.getClass().isArray()) {
-                Object[] arr = (Object[]) scalaValue;
+        protected ArrayData toCatalystImpl(Object javaValue) {
+            if (javaValue.getClass().isArray()) {
+                Object[] arr = (Object[]) javaValue;
                 Object[] converted = new Object[arr.length];
                 for (int i = 0; i < arr.length; i++) {
                     converted[i] = elementConverter.toCatalyst(arr[i]);
                 }
                 return new GenericArrayData(converted);
-            } else if (scalaValue instanceof List) {
-                List<?> list = (List<?>) scalaValue;
+            } else if (javaValue instanceof List) {
+                List<?> list = (List<?>) javaValue;
                 Object[] converted = new Object[list.size()];
                 for (int i = 0; i < list.size(); i++) {
                     converted[i] = elementConverter.toCatalyst(list.get(i));
                 }
                 return new GenericArrayData(converted);
-            } else if (scalaValue instanceof Iterable) {
-                Iterable<?> iterable = (Iterable<?>) scalaValue;
+            } else if (javaValue instanceof Iterable) {
+                Iterable<?> iterable = (Iterable<?>) javaValue;
                 List<Object> convertedList = new ArrayList<>();
                 for (Object item : iterable) {
                     convertedList.add(elementConverter.toCatalyst(item));
@@ -178,13 +178,13 @@ public class CatalystTypeConverters {
                 return new GenericArrayData(convertedList.toArray(new Object[0]));
             } else {
                 throw new IllegalArgumentException(
-                        "The value (" + scalaValue.toString() + ") of the type (" + scalaValue.getClass().getCanonicalName() + ") "
+                        "The value (" + javaValue.toString() + ") of the type (" + javaValue.getClass().getCanonicalName() + ") "
                                 + "cannot be converted to an array of " + elementType.simpleString());
             }
         }
 
         @Override
-        public List<Object> toScala(ArrayData catalystValue) {
+        public List<Object> toJava(ArrayData catalystValue) {
             if (catalystValue == null) {
                 return null;
             } else if (isPrimitive(elementType)) {
@@ -193,15 +193,15 @@ public class CatalystTypeConverters {
             } else {
                 Object[] result = new Object[catalystValue.numElements()];
                 catalystValue.foreach(elementType, (i, e) -> {
-                    result[i] = elementConverter.toScala(e);
+                    result[i] = elementConverter.toJava(e);
                 });
                 return Arrays.asList(result);
             }
         }
 
         @Override
-        protected List<Object> toScalaImpl(InternalRow row, int column) {
-            return toScala(row.getArray(column));
+        protected List<Object> toJavaImpl(InternalRow row, int column) {
+            return toJava(row.getArray(column));
         }
     }
 
@@ -219,24 +219,24 @@ public class CatalystTypeConverters {
         }
 
         @Override
-        protected MapData toCatalystImpl(Object scalaValue) {
+        protected MapData toCatalystImpl(Object javaValue) {
             Function<Object, Object> keyFunction = keyConverter::toCatalyst;
             Function<Object, Object> valueFunction = valueConverter::toCatalyst;
 
-            if (scalaValue instanceof Map) {
+            if (javaValue instanceof Map) {
                 @SuppressWarnings("unchecked")
-                Map<Object, Object> map = (Map<Object, Object>) scalaValue;
+                Map<Object, Object> map = (Map<Object, Object>) javaValue;
                 return ArrayBasedMapData.fromMap(map, keyFunction, valueFunction);
             } else {
                 throw new IllegalArgumentException(
-                        "The value (" + scalaValue.toString() + ") of the type (" + scalaValue.getClass().getCanonicalName() + ") "
+                        "The value (" + javaValue.toString() + ") of the type (" + javaValue.getClass().getCanonicalName() + ") "
                                 + "cannot be converted to a map type with "
                                 + "key type (" + keyType.simpleString() + ") and value type (" + valueType.simpleString() + ")");
             }
         }
 
         @Override
-        public Map<Object, Object> toScala(MapData catalystValue) {
+        public Map<Object, Object> toJava(MapData catalystValue) {
             if (catalystValue == null) {
                 return null;
             } else {
@@ -248,7 +248,7 @@ public class CatalystTypeConverters {
                 } else {
                     convertedKeys = new Object[keys.length];
                     for (int i = 0; i < keys.length; i++) {
-                        convertedKeys[i] = keyConverter.toScala(keys[i]);
+                        convertedKeys[i] = keyConverter.toJava(keys[i]);
                     }
                 }
                 Object[] convertedValues;
@@ -257,7 +257,7 @@ public class CatalystTypeConverters {
                 } else {
                     convertedValues = new Object[values.length];
                     for (int i = 0; i < values.length; i++) {
-                        convertedValues[i] = valueConverter.toScala(values[i]);
+                        convertedValues[i] = valueConverter.toJava(values[i]);
                     }
                 }
 
@@ -266,8 +266,8 @@ public class CatalystTypeConverters {
         }
 
         @Override
-        protected Map<Object, Object> toScalaImpl(InternalRow row, int column) {
-            return toScala(row.getMap(column));
+        protected Map<Object, Object> toJavaImpl(InternalRow row, int column) {
+            return toJava(row.getMap(column));
         }
     }
 
@@ -285,9 +285,9 @@ public class CatalystTypeConverters {
         }
 
         @Override
-        protected InternalRow toCatalystImpl(Object scalaValue) {
-            if (scalaValue instanceof Row) {
-                Row row = (Row) scalaValue;
+        protected InternalRow toCatalystImpl(Object javaValue) {
+            if (javaValue instanceof Row) {
+                Row row = (Row) javaValue;
                 Object[] ar = new Object[row.size()];
                 for (int idx = 0; idx < row.size(); idx++) {
                     ar[idx] = converters[idx].toCatalyst(row.get(idx));
@@ -295,27 +295,27 @@ public class CatalystTypeConverters {
                 return new GenericInternalRow(ar);
             } else {
                 throw new IllegalArgumentException(
-                        "The value (" + scalaValue.toString() + ") of the type (" + scalaValue.getClass().getCanonicalName() + ") "
+                        "The value (" + javaValue.toString() + ") of the type (" + javaValue.getClass().getCanonicalName() + ") "
                                 + "cannot be converted to " + structType.simpleString());
             }
         }
 
         @Override
-        public Row toScala(InternalRow row) {
+        public Row toJava(InternalRow row) {
             if (row == null) {
                 return null;
             } else {
                 Object[] ar = new Object[row.numFields()];
                 for (int idx = 0; idx < row.numFields(); idx++) {
-                    ar[idx] = converters[idx].toScala(row, idx);
+                    ar[idx] = converters[idx].toJava(row, idx);
                 }
                 return new GenericRowWithSchema(ar, structType);
             }
         }
 
         @Override
-        protected Row toScalaImpl(InternalRow row, int column) {
-            return toScala(row.getStruct(column, structType.fields.length));
+        protected Row toJavaImpl(InternalRow row, int column) {
+            return toJava(row.getStruct(column, structType.fields.length));
         }
     }
 
@@ -323,29 +323,29 @@ public class CatalystTypeConverters {
         static final StringConverter INSTANCE = new StringConverter();
 
         @Override
-        protected UTF8String toCatalystImpl(Object scalaValue) {
-            if (scalaValue instanceof String) {
-                return UTF8String.fromString((String) scalaValue);
-            } else if (scalaValue instanceof UTF8String) {
-                return (UTF8String) scalaValue;
-            } else if (scalaValue instanceof Character) {
-                return UTF8String.fromString(scalaValue.toString());
-            } else if (scalaValue instanceof char[]) {
-                return UTF8String.fromString(String.valueOf((char[]) scalaValue));
+        protected UTF8String toCatalystImpl(Object javaValue) {
+            if (javaValue instanceof String) {
+                return UTF8String.fromString((String) javaValue);
+            } else if (javaValue instanceof UTF8String) {
+                return (UTF8String) javaValue;
+            } else if (javaValue instanceof Character) {
+                return UTF8String.fromString(javaValue.toString());
+            } else if (javaValue instanceof char[]) {
+                return UTF8String.fromString(String.valueOf((char[]) javaValue));
             } else {
                 throw new IllegalArgumentException(
-                        "The value (" + scalaValue.toString() + ") of the type (" + scalaValue.getClass().getCanonicalName() + ") "
+                        "The value (" + javaValue.toString() + ") of the type (" + javaValue.getClass().getCanonicalName() + ") "
                                 + "cannot be converted to the string type");
             }
         }
 
         @Override
-        public String toScala(UTF8String catalystValue) {
+        public String toJava(UTF8String catalystValue) {
             return catalystValue == null ? null : catalystValue.toString();
         }
 
         @Override
-        protected String toScalaImpl(InternalRow row, int column) {
+        protected String toJavaImpl(InternalRow row, int column) {
             return row.getUTF8String(column).toString();
         }
     }
@@ -354,25 +354,25 @@ public class CatalystTypeConverters {
         static final DateConverter INSTANCE = new DateConverter();
 
         @Override
-        protected Object toCatalystImpl(Object scalaValue) {
-            if (scalaValue instanceof Date) {
-                return DateTimeUtils.fromJavaDate((Date) scalaValue);
-            } else if (scalaValue instanceof LocalDate) {
-                return DateTimeUtils.localDateToDays((LocalDate) scalaValue);
+        protected Object toCatalystImpl(Object javaValue) {
+            if (javaValue instanceof Date) {
+                return DateTimeUtils.fromJavaDate((Date) javaValue);
+            } else if (javaValue instanceof LocalDate) {
+                return DateTimeUtils.localDateToDays((LocalDate) javaValue);
             } else {
                 throw new IllegalArgumentException(
-                        "The value (" + scalaValue.toString() + ") of the type (" + scalaValue.getClass().getCanonicalName() + ") "
+                        "The value (" + javaValue.toString() + ") of the type (" + javaValue.getClass().getCanonicalName() + ") "
                                 + "cannot be converted to the " + DateType.INSTANCE.sql() + " type");
             }
         }
 
         @Override
-        public Date toScala(Object catalystValue) {
+        public Date toJava(Object catalystValue) {
             return catalystValue == null ? null : DateTimeUtils.toJavaDate((Integer) catalystValue);
         }
 
         @Override
-        protected Date toScalaImpl(InternalRow row, int column) {
+        protected Date toJavaImpl(InternalRow row, int column) {
             return DateTimeUtils.toJavaDate(row.getInt(column));
         }
     }
@@ -381,17 +381,17 @@ public class CatalystTypeConverters {
         static final LocalDateConverter INSTANCE = new LocalDateConverter();
 
         @Override
-        protected Object toCatalystImpl(Object scalaValue) {
-            return DateConverter.INSTANCE.toCatalystImpl(scalaValue);
+        protected Object toCatalystImpl(Object javaValue) {
+            return DateConverter.INSTANCE.toCatalystImpl(javaValue);
         }
 
         @Override
-        public LocalDate toScala(Object catalystValue) {
+        public LocalDate toJava(Object catalystValue) {
             return catalystValue == null ? null : DateTimeUtils.daysToLocalDate((Integer) catalystValue);
         }
 
         @Override
-        protected LocalDate toScalaImpl(InternalRow row, int column) {
+        protected LocalDate toJavaImpl(InternalRow row, int column) {
             return DateTimeUtils.daysToLocalDate(row.getInt(column));
         }
     }
@@ -400,25 +400,25 @@ public class CatalystTypeConverters {
         static final TimestampConverter INSTANCE = new TimestampConverter();
 
         @Override
-        protected Object toCatalystImpl(Object scalaValue) {
-            if (scalaValue instanceof Timestamp) {
-                return DateTimeUtils.fromJavaTimestamp((Timestamp) scalaValue);
-            } else if (scalaValue instanceof Instant) {
-                return DateTimeUtils.instantToMicros((Instant) scalaValue);
+        protected Object toCatalystImpl(Object javaValue) {
+            if (javaValue instanceof Timestamp) {
+                return DateTimeUtils.fromJavaTimestamp((Timestamp) javaValue);
+            } else if (javaValue instanceof Instant) {
+                return DateTimeUtils.instantToMicros((Instant) javaValue);
             } else {
                 throw new IllegalArgumentException(
-                        "The value (" + scalaValue.toString() + ") of the type (" + scalaValue.getClass().getCanonicalName() + ") "
+                        "The value (" + javaValue.toString() + ") of the type (" + javaValue.getClass().getCanonicalName() + ") "
                                 + "cannot be converted to the " + TimestampType.INSTANCE.sql() + " type");
             }
         }
 
         @Override
-        public Timestamp toScala(Object catalystValue) {
+        public Timestamp toJava(Object catalystValue) {
             return catalystValue == null ? null : DateTimeUtils.toJavaTimestamp((Long) catalystValue);
         }
 
         @Override
-        protected Timestamp toScalaImpl(InternalRow row, int column) {
+        protected Timestamp toJavaImpl(InternalRow row, int column) {
             return DateTimeUtils.toJavaTimestamp(row.getLong(column));
         }
     }
@@ -427,17 +427,17 @@ public class CatalystTypeConverters {
         static final InstantConverter INSTANCE = new InstantConverter();
 
         @Override
-        protected Object toCatalystImpl(Object scalaValue) {
-            return TimestampConverter.INSTANCE.toCatalystImpl(scalaValue);
+        protected Object toCatalystImpl(Object javaValue) {
+            return TimestampConverter.INSTANCE.toCatalystImpl(javaValue);
         }
 
         @Override
-        public Instant toScala(Object catalystValue) {
+        public Instant toJava(Object catalystValue) {
             return catalystValue == null ? null : DateTimeUtils.microsToInstant((Long) catalystValue);
         }
 
         @Override
-        protected Instant toScalaImpl(InternalRow row, int column) {
+        protected Instant toJavaImpl(InternalRow row, int column) {
             return DateTimeUtils.microsToInstant(row.getLong(column));
         }
     }
@@ -446,23 +446,23 @@ public class CatalystTypeConverters {
         static final TimestampNTZConverter INSTANCE = new TimestampNTZConverter();
 
         @Override
-        protected Object toCatalystImpl(Object scalaValue) {
-            if (scalaValue instanceof LocalDateTime) {
-                return DateTimeUtils.localDateTimeToMicros((LocalDateTime) scalaValue);
+        protected Object toCatalystImpl(Object javaValue) {
+            if (javaValue instanceof LocalDateTime) {
+                return DateTimeUtils.localDateTimeToMicros((LocalDateTime) javaValue);
             } else {
                 throw new IllegalArgumentException(
-                        "The value (" + scalaValue.toString() + ") of the type (" + scalaValue.getClass().getCanonicalName() + ") "
+                        "The value (" + javaValue.toString() + ") of the type (" + javaValue.getClass().getCanonicalName() + ") "
                                 + "cannot be converted to the " + TimestampNTZType.INSTANCE.sql() + " type");
             }
         }
 
         @Override
-        public LocalDateTime toScala(Object catalystValue) {
+        public LocalDateTime toJava(Object catalystValue) {
             return catalystValue == null ? null : DateTimeUtils.microsToLocalDateTime((Long) catalystValue);
         }
 
         @Override
-        protected LocalDateTime toScalaImpl(InternalRow row, int column) {
+        protected LocalDateTime toJavaImpl(InternalRow row, int column) {
             return DateTimeUtils.microsToLocalDateTime(row.getLong(column));
         }
     }
@@ -476,44 +476,42 @@ public class CatalystTypeConverters {
         }
 
         @Override
-        protected Decimal toCatalystImpl(Object scalaValue) {
+        protected Decimal toCatalystImpl(Object javaValue) {
             Decimal decimal;
-            if (scalaValue instanceof BigDecimal) {
-                decimal = new Decimal((BigDecimal) scalaValue);
-            } else if (scalaValue instanceof java.math.BigDecimal) {
-                decimal = new Decimal((java.math.BigDecimal) scalaValue);
-            } else if (scalaValue instanceof BigInteger) {
-                decimal = new Decimal((BigInteger) scalaValue);
-            } else if (scalaValue instanceof Decimal) {
-                decimal = (Decimal) scalaValue;
+            if (javaValue instanceof BigDecimal) {
+                decimal = new Decimal((BigDecimal) javaValue);
+            } else if (javaValue instanceof BigInteger) {
+                decimal = new Decimal((BigInteger) javaValue);
+            } else if (javaValue instanceof Decimal) {
+                decimal = (Decimal) javaValue;
             } else {
                 throw new IllegalArgumentException(
-                        "The value (" + scalaValue.toString() + ") of the type (" + scalaValue.getClass().getCanonicalName() + ") "
+                        "The value (" + javaValue.toString() + ") of the type (" + javaValue.getClass().getCanonicalName() + ") "
                                 + "cannot be converted to " + dataType.simpleString());
             }
             return decimal.toPrecision(dataType.precision, dataType.scale, java.math.RoundingMode.HALF_UP, nullOnOverflow);
         }
 
         @Override
-        public BigDecimal toScala(Decimal catalystValue) {
+        public BigDecimal toJava(Decimal catalystValue) {
             return catalystValue == null ? null : catalystValue.toBigDecimal();
         }
 
         @Override
-        protected BigDecimal toScalaImpl(InternalRow row, int column) {
+        protected BigDecimal toJavaImpl(InternalRow row, int column) {
             return row.getDecimal(column, dataType.precision, dataType.scale).toBigDecimal();
         }
     }
 
     private abstract static class PrimitiveConverter<T> extends CatalystTypeConverter<T, Object, Object> {
         @Override
-        public final Object toScala(Object catalystValue) {
+        public final Object toJava(Object catalystValue) {
             return catalystValue;
         }
 
         @Override
-        protected final Object toCatalystImpl(T scalaValue) {
-            return scalaValue;
+        protected final Object toCatalystImpl(T javaValue) {
+            return javaValue;
         }
     }
 
@@ -521,7 +519,7 @@ public class CatalystTypeConverters {
         static final BooleanConverter INSTANCE = new BooleanConverter();
 
         @Override
-        protected Boolean toScalaImpl(InternalRow row, int column) {
+        protected Boolean toJavaImpl(InternalRow row, int column) {
             return row.getBoolean(column);
         }
     }
@@ -530,7 +528,7 @@ public class CatalystTypeConverters {
         static final IntConverter INSTANCE = new IntConverter();
 
         @Override
-        protected Integer toScalaImpl(InternalRow row, int column) {
+        protected Integer toJavaImpl(InternalRow row, int column) {
             return row.getInt(column);
         }
     }
@@ -539,7 +537,7 @@ public class CatalystTypeConverters {
         static final LongConverter INSTANCE = new LongConverter();
 
         @Override
-        protected Long toScalaImpl(InternalRow row, int column) {
+        protected Long toJavaImpl(InternalRow row, int column) {
             return row.getLong(column);
         }
     }
@@ -548,7 +546,7 @@ public class CatalystTypeConverters {
         static final FloatConverter INSTANCE = new FloatConverter();
 
         @Override
-        protected Float toScalaImpl(InternalRow row, int column) {
+        protected Float toJavaImpl(InternalRow row, int column) {
             return row.getFloat(column);
         }
     }
@@ -557,7 +555,7 @@ public class CatalystTypeConverters {
         static final DoubleConverter INSTANCE = new DoubleConverter();
 
         @Override
-        protected Double toScalaImpl(InternalRow row, int column) {
+        protected Double toJavaImpl(InternalRow row, int column) {
             return row.getDouble(column);
         }
     }
@@ -581,12 +579,12 @@ public class CatalystTypeConverters {
      * Typical use case would be converting a collection of rows that have the same schema. You will
      * call this function once to get a converter, and apply it to every row.
      */
-    public static Function<Object, Object> createToScalaConverter(DataType dataType) {
+    public static Function<Object, Object> createToJavaConverter(DataType dataType) {
         if (isPrimitive(dataType)) {
             return Function.identity();
         } else {
             CatalystTypeConverter<Object, Object, Object> converter = getConverterForType(dataType);
-            return converter::toScala;
+            return converter::toJava;
         }
     }
 
@@ -615,9 +613,6 @@ public class CatalystTypeConverters {
         } else if (a instanceof BigDecimal) {
             BigDecimal d = (BigDecimal) a;
             return new DecimalConverter(new DecimalType(Math.max(d.precision(), d.scale()), d.scale())).toCatalyst(d);
-        } else if (a instanceof java.math.BigDecimal) {
-            java.math.BigDecimal d = (java.math.BigDecimal) a;
-            return new DecimalConverter(new DecimalType(Math.max(d.precision(), d.scale()), d.scale())).toCatalyst(d);
         } else if (a instanceof List) {
             List<?> seq = (List<?>) a;
             Object[] converted = new Object[seq.size()];
@@ -627,11 +622,11 @@ public class CatalystTypeConverters {
             return new GenericArrayData(converted);
         } else if (a instanceof Row) {
             Row r = (Row) a;
-            List<Object> converted = new ArrayList<>();
+            Object[] converted = new Object[r.size()];
             for (int i = 0; i < r.size(); i++) {
-                converted.add(convertToCatalyst(r.get(i)));
+                converted[i] = convertToCatalyst(r.get(i));
             }
-            return new GenericInternalRow(converted.toArray(new Object[0]));
+            return new GenericInternalRow(converted);
         } else if (a instanceof byte[]) {
             return a;
         } else if (a instanceof char[]) {
@@ -660,8 +655,8 @@ public class CatalystTypeConverters {
      * This method is slow, and for batch conversion you should be using converter
      * produced by createToScalaConverter.
      */
-    public static Object convertToScala(Object catalystValue, DataType dataType) {
-        return createToScalaConverter(dataType).apply(catalystValue);
+    public static Object convertToJava(Object catalystValue, DataType dataType) {
+        return createToJavaConverter(dataType).apply(catalystValue);
     }
 }
 

@@ -1,12 +1,28 @@
 package com.jipple.sql.catalyst;
 
+import com.jipple.sql.catalyst.expressions.GenericInternalRow;
 import com.jipple.sql.catalyst.expressions.SpecializedGetters;
+import com.jipple.sql.catalyst.types.PhysicalArrayType;
+import com.jipple.sql.catalyst.types.PhysicalBinaryType;
+import com.jipple.sql.catalyst.types.PhysicalBooleanType;
+import com.jipple.sql.catalyst.types.PhysicalCalendarIntervalType;
+import com.jipple.sql.catalyst.types.PhysicalDataType;
+import com.jipple.sql.catalyst.types.PhysicalDecimalType;
+import com.jipple.sql.catalyst.types.PhysicalDoubleType;
+import com.jipple.sql.catalyst.types.PhysicalFloatType;
+import com.jipple.sql.catalyst.types.PhysicalIntegerType;
+import com.jipple.sql.catalyst.types.PhysicalLongType;
+import com.jipple.sql.catalyst.types.PhysicalMapType;
+import com.jipple.sql.catalyst.types.PhysicalStringType;
+import com.jipple.sql.catalyst.types.PhysicalStructType;
 import com.jipple.sql.catalyst.util.ArrayData;
 import com.jipple.sql.catalyst.util.MapData;
+import com.jipple.sql.types.DataType;
 import com.jipple.unsafe.types.CalendarInterval;
 import com.jipple.unsafe.types.UTF8String;
 
 import java.io.Serializable;
+import java.util.List;
 
 public abstract class InternalRow implements SpecializedGetters, Serializable {
 
@@ -82,6 +98,28 @@ public abstract class InternalRow implements SpecializedGetters, Serializable {
         return false;
     }
 
+
+    public static final InternalRow EMPTY = new GenericInternalRow(new Object[0]);
+
+    /**
+     * This method can be used to construct a [[InternalRow]] with the given values.
+     */
+    public static InternalRow of(Object... values) {
+        return new GenericInternalRow(values);
+    }
+
+    /**
+     * This method can be used to construct a [[InternalRow]] from a [[Seq]] of values.
+     */
+    public static InternalRow fromList(List<Object> values) {
+        return new GenericInternalRow(values.toArray());
+    }
+
+    /** Returns an empty [[InternalRow]]. */
+    public static InternalRow empty() {
+        return EMPTY;
+    }
+
     /**
      * Copies the given value if it's string/struct/array/map type.
      */
@@ -98,4 +136,51 @@ public abstract class InternalRow implements SpecializedGetters, Serializable {
             return value;
         }
     }
+
+    public static InternalRowAccessor getAccessor(DataType dataType) {
+        return getAccessor(dataType, true);
+    }
+
+    /**
+     * Returns an accessor for an {@link InternalRow} with given data type.
+     * The returned accessor takes a {@link SpecializedGetters} input so it can be reused
+     * for other implementations (e.g. {@link ArrayData}).
+     */
+    public static InternalRowAccessor getAccessor(DataType dataType, boolean nullable) {
+        InternalRowAccessor getValueNullSafe;
+        PhysicalDataType<?> physicalType = PhysicalDataType.of(dataType);
+        if (physicalType instanceof PhysicalBooleanType) {
+            getValueNullSafe = (input, ordinal) -> input.getBoolean(ordinal);
+        } else if (physicalType instanceof PhysicalIntegerType) {
+            getValueNullSafe = (input, ordinal) -> input.getInt(ordinal);
+        } else if (physicalType instanceof PhysicalLongType) {
+            getValueNullSafe = (input, ordinal) -> input.getLong(ordinal);
+        } else if (physicalType instanceof PhysicalFloatType) {
+            getValueNullSafe = (input, ordinal) -> input.getFloat(ordinal);
+        } else if (physicalType instanceof PhysicalDoubleType) {
+            getValueNullSafe = (input, ordinal) -> input.getDouble(ordinal);
+        } else if (physicalType instanceof PhysicalStringType) {
+            getValueNullSafe = (input, ordinal) -> input.getUTF8String(ordinal);
+        } else if (physicalType instanceof PhysicalBinaryType) {
+            getValueNullSafe = (input, ordinal) -> input.getBinary(ordinal);
+        } else if (physicalType instanceof PhysicalCalendarIntervalType) {
+            getValueNullSafe = (input, ordinal) -> input.getInterval(ordinal);
+        } else if (physicalType instanceof PhysicalDecimalType decimalType) {
+            getValueNullSafe = (input, ordinal) -> input.getDecimal(ordinal, decimalType.precision, decimalType.scale);
+        } else if (physicalType instanceof PhysicalStructType structType) {
+            getValueNullSafe = (input, ordinal) -> input.getStruct(ordinal, structType.fields.length);
+        } else if (physicalType instanceof PhysicalArrayType) {
+            getValueNullSafe = (input, ordinal) -> input.getArray(ordinal);
+        } else if (physicalType instanceof PhysicalMapType) {
+            getValueNullSafe = (input, ordinal) -> input.getMap(ordinal);
+        } else {
+            getValueNullSafe = (input, ordinal) -> input.get(ordinal, dataType);
+        }
+
+        if (nullable) {
+            return (getter, index) -> getter.isNullAt(index) ? null : getValueNullSafe.get(getter, index);
+        }
+        return getValueNullSafe;
+    }
+
 }

@@ -5,6 +5,14 @@ import com.jipple.sql.catalyst.expressions.named.Attribute;
 import java.util.List;
 
 public class EvalGenerator extends CodeGeneratorWithInterpretedFallback<Expression, Eval> {
+    public static final EvalGenerator INSTANCE = new EvalGenerator();
+    private EvalGenerator() {
+    }
+
+    public static EvalGenerator get() {
+        return INSTANCE;
+    }
+
     @Override
     protected Eval createCodeGeneratedObject(Expression expression) {
         return null;

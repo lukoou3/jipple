@@ -1,12 +1,14 @@
 package com.jipple.sql.catalyst.expressions;
 
 import com.jipple.sql.catalyst.InternalRow;
+import com.jipple.sql.catalyst.InternalRowAccessor;
 import com.jipple.sql.types.DataType;
 
 public class BoundReference extends LeafExpression {
     public final int ordinal;
     public final DataType dataType;
     public final boolean nullable;
+    private final InternalRowAccessor accessor;
 
     public BoundReference(int ordinal, DataType dataType) {
         this(ordinal, dataType, true);
@@ -16,6 +18,7 @@ public class BoundReference extends LeafExpression {
         this.ordinal = ordinal;
         this.dataType = dataType;
         this.nullable = nullable;
+        this.accessor = InternalRow.getAccessor(dataType, nullable);
     }
 
     @Override
@@ -40,7 +43,7 @@ public class BoundReference extends LeafExpression {
 
     @Override
     public Object eval(InternalRow input) {
-        return input.get(ordinal, dataType);
+        return accessor.get(input, ordinal);
     }
 
 }
