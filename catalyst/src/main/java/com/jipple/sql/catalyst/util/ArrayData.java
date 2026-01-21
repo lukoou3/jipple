@@ -1,6 +1,7 @@
 package com.jipple.sql.catalyst.util;
 
 import com.jipple.sql.catalyst.expressions.SpecializedGetters;
+import com.jipple.sql.types.DataType;
 
 import java.io.Serializable;
 
@@ -79,6 +80,30 @@ public abstract class ArrayData implements SpecializedGetters, Serializable {
             values[i] = getDouble(i);
         }
         return values;
+    }
+
+    /**
+     * Converts this ArrayData to an Object array using the specified element type.
+     * This is a generic method that works for any DataType.
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T[] toArray(DataType elementType) {
+        int size = numElements();
+        Object[] result = new Object[size];
+        for (int i = 0; i < size; i++) {
+            result[i] = get(i, elementType);
+        }
+        return (T[]) result;
+    }
+
+    /**
+     * Applies a function to each element of this ArrayData.
+     */
+    public void foreach(DataType elementType, java.util.function.BiConsumer<Integer, Object> f) {
+        int length = numElements();
+        for (int i = 0; i < length; i++) {
+            f.accept(i, get(i, elementType));
+        }
     }
 
 }
