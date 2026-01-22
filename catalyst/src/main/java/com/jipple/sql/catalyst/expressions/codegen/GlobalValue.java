@@ -4,8 +4,8 @@ package com.jipple.sql.catalyst.expressions.codegen;
  * A global variable java expression.
  */
 public class GlobalValue implements ExprValue {
-    private final String value;
-    private final Class<?> javaType;
+    public final String value;
+    public final Class<?> javaType;
 
     public GlobalValue(String value, Class<?> javaType) {
         this.value = value;
@@ -20,6 +20,11 @@ public class GlobalValue implements ExprValue {
     @Override
     public Class<?> javaType() {
         return javaType;
+    }
+
+    @Override
+    public String toString() {
+        return code();
     }
 
     @Override

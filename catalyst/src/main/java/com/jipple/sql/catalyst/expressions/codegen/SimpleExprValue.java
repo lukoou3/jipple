@@ -4,12 +4,16 @@ package com.jipple.sql.catalyst.expressions.codegen;
  * A java expression fragment.
  */
 public class SimpleExprValue implements ExprValue {
-    private final String expr;
-    private final Class<?> javaType;
+    public final String expr;
+    public final Class<?> javaType;
 
     public SimpleExprValue(String expr, Class<?> javaType) {
         this.expr = expr;
         this.javaType = javaType;
+    }
+
+    public String expr() {
+        return expr;
     }
 
     @Override
@@ -20,6 +24,11 @@ public class SimpleExprValue implements ExprValue {
     @Override
     public Class<?> javaType() {
         return javaType;
+    }
+
+    @Override
+    public String toString() {
+        return code();
     }
 
     @Override

@@ -17,6 +17,11 @@ public class Inline implements JavaCode {
     }
 
     @Override
+    public String toString() {
+        return code();
+    }
+
+    @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;

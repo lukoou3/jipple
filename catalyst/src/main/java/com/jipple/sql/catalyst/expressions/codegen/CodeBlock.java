@@ -45,7 +45,7 @@ public class CodeBlock extends Block {
             }
 
             while (partIndex < codeParts.size() && inputIndex < blockInputs.size()) {
-                buf.append(blockInputs.get(inputIndex++).code());
+                buf.append(blockInputs.get(inputIndex++).toString());
                 if (partIndex < codeParts.size()) {
                     buf.append(codeParts.get(partIndex++));
                 }

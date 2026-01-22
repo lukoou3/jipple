@@ -150,10 +150,7 @@ public class CodeBlockTest {
         
         CodeBlock codeBlock = (CodeBlock) code;
         // The literal should be folded into code parts, not in blockInputs
-        // In our implementation, literals are still in blockInputs as Inline
-        // This test verifies the structure
-        assertTrue(codeBlock.blockInputs().size() >= 1);
-        assertTrue(codeBlock.blockInputs().contains(value));
+        assertEquals(List.of(value), codeBlock.blockInputs());
     }
 
     @Test
@@ -249,7 +246,6 @@ public class CodeBlockTest {
 
         Block code1 = Block.block(
             """
-            
                |boolean ${isNull1} = false;
                |int ${value1} = -1;
             """,
@@ -258,7 +254,6 @@ public class CodeBlockTest {
         
         Block code2 = Block.block(
             """
-            
                |boolean ${isNull2} = true;
                |int ${value2} = ${literal};
             """,
@@ -267,7 +262,7 @@ public class CodeBlockTest {
 
         Block code = code1.plus(code2);
 
-        String expected = "\n       |boolean expr1_isNull = false;\n       |int expr1 = -1;\n       |boolean expr2_isNull = true;\n       |int expr2 = 100;".trim();
+        String expected = "boolean expr1_isNull = false;\nint expr1 = -1;\nboolean expr2_isNull = true;\nint expr2 = 100;".trim();
 
         assertEquals(expected, code.toString());
 
@@ -289,24 +284,16 @@ public class CodeBlockTest {
 
     @Test
     public void testThrowsExceptionWhenInterpolatingUnexpectedObjectInCodeBlock() {
-        // Create a simple object that shouldn't be interpolated
-        // Note: Block.block() accepts any Object in the Map, so we test with a placeholder
-        // that would cause issues if we tried to use it directly
-        Object obj = new Object() {
-            @Override
-            public String toString() {
-                return "test";
-            }
-        };
-        
-        // This should work fine since Block.block() converts objects to Inline
-        // The test verifies that the placeholder system works correctly
-        Block code = Block.block(
-            "value = ${obj};",
-            Map.of("obj", obj)
-        );
-        
-        assertEquals("value = test;", code.toString());
+        Object obj = new Object();
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
+            Block.block(
+                "value = ${obj};",
+                Map.of("obj", obj)
+            );
+        });
+
+        assertTrue(e.getMessage().contains("Can not interpolate"));
     }
 
     @Test
@@ -317,7 +304,6 @@ public class CodeBlockTest {
 
         Block code = Block.block(
             """
-            
                |callFunc(int ${expr}) {
                |  boolean ${isNull} = false;
                |  int ${exprInFunc} = ${expr} + 1;
@@ -330,10 +316,8 @@ public class CodeBlockTest {
 
         // We want to replace all occurrences of `expr` with the variable `aliasedParam`.
         Block aliasedCode = code.transformExprValues(e -> {
-            if (e instanceof SimpleExprValue) {
-                SimpleExprValue sev = (SimpleExprValue) e;
-                if ("1 + 1".equals(sev.code().replace("(", "").replace(")", "")) && 
-                    Integer.TYPE.equals(sev.javaType())) {
+            if (e instanceof SimpleExprValue sev) {
+                if ("1 + 1".equals(sev.expr()) && Integer.TYPE.equals(sev.javaType())) {
                     return aliasedParam;
                 }
             }
@@ -342,7 +326,6 @@ public class CodeBlockTest {
         
         Block expected = Block.block(
             """
-            
                |callFunc(int ${aliasedParam}) {
                |  boolean ${isNull} = false;
                |  int ${exprInFunc} = ${aliasedParam} + 1;
@@ -363,8 +346,7 @@ public class CodeBlockTest {
         List<String> funcs = java.util.Arrays.asList("callFunc1", "callFunc2", "callFunc3");
         List<Block> subBlocks = funcs.stream().map(funcName -> {
             return Block.block(
-                """
-                
+                """               
                    |${funcName}(int ${expr}) {
                    |  boolean ${isNull} = false;
                    |  int ${exprInFunc} = ${expr} + 1;
@@ -376,22 +358,21 @@ public class CodeBlockTest {
 
         VariableValue aliasedParam = JavaCode.variable("aliased", expr.javaType());
 
-        Block block = subBlocks.get(0).plus(
-            Block.block("\n", Map.of())
-        ).plus(subBlocks.get(1)).plus(
-            Block.block("\n", Map.of())
-        ).plus(subBlocks.get(2));
+        Block block = Block.block(
+            "${b1}\n${b2}\n${b3}",
+            Map.of("b1", subBlocks.get(0), "b2", subBlocks.get(1), "b3", subBlocks.get(2))
+        );
         
         // Transform the block
-        Block transformedBlock = block.transformExprValues(e -> {
-            if (e instanceof SimpleExprValue) {
-                SimpleExprValue sev = (SimpleExprValue) e;
-                if ("1 + 1".equals(sev.code().replace("(", "").replace(")", "")) && 
-                    Integer.TYPE.equals(sev.javaType())) {
-                    return aliasedParam;
+        Block transformedBlock = block.transformDown(b -> {
+            return b.transformExprValues(e -> {
+                if (e instanceof SimpleExprValue sev) {
+                    if ("1 + 1".equals(sev.expr()) && Integer.TYPE.equals(sev.javaType())) {
+                        return aliasedParam;
+                    }
                 }
-            }
-            return e;
+                return e;
+            });
         });
 
         // Verify the transformation

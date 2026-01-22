@@ -22,90 +22,6 @@ public class BlockUtils {
     }
 
     /**
-     * Creates a code block from string parts and arguments.
-     * Note: This is a simplified version. For full functionality, use the code(StringContext, Object...) method.
-     */
-    public static Block code(Object... args) {
-        // This is a simplified version - the full implementation would need StringContext
-        // For now, we'll create a simple code block
-        if (args.length == 0) {
-            return EmptyBlock.INSTANCE;
-        }
-
-        // Validate arguments
-        for (Object arg : args) {
-            if (!(arg instanceof ExprValue || arg instanceof Inline || arg instanceof Block ||
-                  arg instanceof Boolean || arg instanceof Byte || arg instanceof Integer ||
-                  arg instanceof Long || arg instanceof Float || arg instanceof Double ||
-                  arg instanceof String)) {
-                throw new IllegalArgumentException("Can not interpolate " + arg.getClass().getName());
-            }
-        }
-
-        // This is a placeholder - the actual implementation would need StringContext
-        // which is a Scala feature. We'll need to create a Java equivalent.
-        return EmptyBlock.INSTANCE; // TODO: Implement proper code block creation
-    }
-
-    /**
-     * Creates a code block from a string context and arguments.
-     * This is a Java equivalent of Scala's string interpolation.
-     */
-    public static Block code(StringContext sc, Object... args) {
-        sc.checkLengths(args);
-        if (sc.parts().length == 0) {
-            return EmptyBlock.INSTANCE;
-        }
-
-        // Validate arguments
-        for (Object arg : args) {
-            if (!(arg instanceof ExprValue || arg instanceof Inline || arg instanceof Block ||
-                  arg instanceof Boolean || arg instanceof Byte || arg instanceof Integer ||
-                  arg instanceof Long || arg instanceof Float || arg instanceof Double ||
-                  arg instanceof String)) {
-                throw new IllegalArgumentException("Can not interpolate " + arg.getClass().getName());
-            }
-        }
-
-        Tuple2<List<String>, List<JavaCode>> result = foldLiteralArgs(sc.parts(), Arrays.asList(args));
-        return new CodeBlock(result._1, result._2);
-    }
-
-    /**
-     * Folds eagerly the literal args into the code parts.
-     */
-    private static Tuple2<List<String>, List<JavaCode>> foldLiteralArgs(
-            String[] parts, List<Object> args) {
-        List<String> codeParts = new ArrayList<>();
-        List<JavaCode> blockInputs = new ArrayList<>();
-
-        int partIndex = 0;
-        int argIndex = 0;
-        StringBuilder buf = new StringBuilder(CODE_BLOCK_BUFFER_LENGTH);
-
-        if (partIndex < parts.length) {
-            buf.append(StringContext.treatEscapes(parts[partIndex++]));
-        }
-
-        while (partIndex < parts.length && argIndex < args.size()) {
-            Object input = args.get(argIndex++);
-            if (input instanceof ExprValue || input instanceof CodeBlock) {
-                codeParts.add(buf.toString());
-                buf.setLength(0);
-                blockInputs.add((JavaCode) input);
-            } else if (input != EmptyBlock.INSTANCE) {
-                buf.append(input);
-            }
-            if (partIndex < parts.length) {
-                buf.append(StringContext.treatEscapes(parts[partIndex++]));
-            }
-        }
-        codeParts.add(buf.toString());
-
-        return new Tuple2<>(codeParts, blockInputs);
-    }
-
-    /**
      * Creates a code block from a template string with placeholders, similar to Python's format().
      * Supports Java text blocks (""") for multi-line templates.
      * 
@@ -147,70 +63,79 @@ public class BlockUtils {
      * @throws IllegalArgumentException if a placeholder is not found in variables
      */
     public static Block block(String template, Map<String, Object> variables) {
-        if (template == null || template.isEmpty()) {
+        if (template == null) {
             return EmptyBlock.INSTANCE;
         }
-        
+
         List<String> codeParts = new ArrayList<>();
         List<JavaCode> blockInputs = new ArrayList<>();
         StringBuilder currentPart = new StringBuilder(CODE_BLOCK_BUFFER_LENGTH);
-        
+
         Matcher matcher = PLACEHOLDER_PATTERN.matcher(template);
         int lastEnd = 0;
-        
+
         while (matcher.find()) {
-            // Add text before the match
+            // Add text before the match (treat escapes in template parts only)
             if (matcher.start() > lastEnd) {
-                currentPart.append(template, lastEnd, matcher.start());
+                String part = template.substring(lastEnd, matcher.start());
+                currentPart.append(StringContext.treatEscapes(part));
             }
-            
+
             String escapedDollar = matcher.group(1); // escaped dollar $$
             String placeholderName = matcher.group(2); // placeholder name in ${variable}
-            
+
             if (escapedDollar != null) {
-                // Escaped dollar: $$
-                // Add single $ to current part
+                // Escaped dollar: $$ -> $
                 currentPart.append('$');
             } else if (placeholderName != null) {
-                // Found a placeholder ${name}
-                // First, save the current part if it's not empty
-                // Apply treatEscapes to code parts (template strings), but not to inserted values
-                if (currentPart.length() > 0) {
-                    codeParts.add(StringContext.treatEscapes(currentPart.toString()));
-                    currentPart.setLength(0);
+                if (variables == null || !variables.containsKey(placeholderName)) {
+                    throw new IllegalArgumentException(
+                        "Placeholder '" + placeholderName + "' not found in variables. Available: " +
+                            (variables == null ? "[]" : variables.keySet()));
                 }
-                
-                // Get the value for this placeholder
+
                 Object value = variables.get(placeholderName);
                 if (value == null) {
                     throw new IllegalArgumentException(
-                        "Placeholder '" + placeholderName + "' not found in variables. Available: " + variables.keySet());
+                        "Placeholder '" + placeholderName + "' is null. Available: " + variables.keySet());
                 }
-                
-                // Convert value to JavaCode
-                // Note: The value itself should NOT be escaped - only template code parts are escaped
-                JavaCode codeValue = toJavaCode(value);
-                blockInputs.add(codeValue);
+
+                if (!isValidInterpolationArg(value)) {
+                    throw new IllegalArgumentException(
+                        "Can not interpolate " + value.getClass().getName());
+                }
+
+                if (value == EmptyBlock.INSTANCE) {
+                    // Ignore empty blocks, keep current part
+                } else if (value instanceof ExprValue || value instanceof Block) {
+                    // Flush current part (even if empty) and preserve block input
+                    codeParts.add(currentPart.toString());
+                    currentPart.setLength(0);
+                    blockInputs.add((JavaCode) value);
+                } else if (value instanceof Inline) {
+                    currentPart.append(((Inline) value).code());
+                } else {
+                    // Primitive/String literals are folded into code parts
+                    currentPart.append(String.valueOf(value));
+                }
             }
-            
+
             lastEnd = matcher.end();
         }
-        
-        // Add remaining text after the last match
+
+        // Add remaining text after the last match (treat escapes in template parts only)
         if (lastEnd < template.length()) {
-            currentPart.append(template, lastEnd, template.length());
+            String tail = template.substring(lastEnd, template.length());
+            currentPart.append(StringContext.treatEscapes(tail));
         }
-        
-        // Add the final part (apply treatEscapes to code parts)
-        if (currentPart.length() > 0) {
-            codeParts.add(StringContext.treatEscapes(currentPart.toString()));
-        }
-        
-        // If no placeholders were found, return a simple code block
-        if (codeParts.isEmpty() && blockInputs.isEmpty()) {
+
+        // Always add the final part to keep codeParts = blockInputs + 1
+        codeParts.add(currentPart.toString());
+
+        if (blockInputs.isEmpty() && codeParts.size() == 1 && codeParts.get(0).isEmpty()) {
             return EmptyBlock.INSTANCE;
         }
-        
+
         return new CodeBlock(codeParts, blockInputs);
     }
     
@@ -220,34 +145,18 @@ public class BlockUtils {
      * - Strings and primitives are wrapped in Inline
      * - Other types are converted to String and wrapped in Inline
      */
-    private static JavaCode toJavaCode(Object value) {
-        if (value instanceof JavaCode) {
-            return (JavaCode) value;
-        } else if (value instanceof String) {
-            return new Inline((String) value);
-        } else if (value instanceof Boolean) {
-            return new Inline(String.valueOf(value));
-        } else if (value instanceof Number) {
-            return new Inline(String.valueOf(value));
-        } else if (value instanceof Character) {
-            return new Inline("'" + value + "'");
-        } else {
-            // For other types, convert to string
-            return new Inline(String.valueOf(value));
-        }
+    private static boolean isValidInterpolationArg(Object value) {
+        return value instanceof ExprValue
+            || value instanceof Inline
+            || value instanceof Block
+            || value instanceof Boolean
+            || value instanceof Byte
+            || value instanceof Integer
+            || value instanceof Long
+            || value instanceof Float
+            || value instanceof Double
+            || value instanceof String;
     }
 
-    /**
-     * Simple tuple class for returning two values.
-     */
-    private static class Tuple2<T1, T2> {
-        final T1 _1;
-        final T2 _2;
-
-        Tuple2(T1 _1, T2 _2) {
-            this._1 = _1;
-            this._2 = _2;
-        }
-    }
 }
 

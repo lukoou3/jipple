@@ -4,8 +4,8 @@ package com.jipple.sql.catalyst.expressions.codegen;
  * A local variable java expression.
  */
 public class VariableValue implements ExprValue {
-    private final String variableName;
-    private final Class<?> javaType;
+    public final String variableName;
+    public final Class<?> javaType;
 
     public VariableValue(String variableName, Class<?> javaType) {
         this.variableName = variableName;
@@ -20,6 +20,11 @@ public class VariableValue implements ExprValue {
     @Override
     public Class<?> javaType() {
         return javaType;
+    }
+
+    @Override
+    public String toString() {
+        return code();
     }
 
     @Override
