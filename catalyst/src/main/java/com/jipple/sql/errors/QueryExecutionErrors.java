@@ -1,6 +1,7 @@
 package com.jipple.sql.errors;
 
 import com.jipple.error.JippleException;
+import com.jipple.error.JippleIllegalArgumentException;
 import com.jipple.error.JippleRuntimeException;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.trees.TreeNode;
@@ -36,4 +37,12 @@ public class QueryExecutionErrors {
                 Map.of("batch", batchName, "plan", sideBySide(plan.treeString(), reOptimized.treeString()).stream().collect(Collectors.joining("\n")))
                 );
     }
+
+    public static JippleIllegalArgumentException tooManyArrayElementsError(int numElements, int elementSize) {
+        return new JippleIllegalArgumentException(
+                "TOO_MANY_ARRAY_ELEMENTS",
+                Map.of("numElements", String.valueOf(numElements), "size",  String.valueOf(elementSize))
+        );
+    }
+
 }
