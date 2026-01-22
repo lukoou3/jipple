@@ -18,6 +18,7 @@ import com.jipple.sql.catalyst.types.PhysicalStructType;
 import com.jipple.sql.catalyst.util.ArrayData;
 import com.jipple.sql.catalyst.util.MapData;
 import com.jipple.sql.types.DataType;
+import com.jipple.sql.types.Decimal;
 import com.jipple.unsafe.types.CalendarInterval;
 import com.jipple.unsafe.types.UTF8String;
 
@@ -76,7 +77,9 @@ public abstract class InternalRow implements SpecializedGetters, Serializable {
      * Note: In order to support update decimal with precision > 18 in UnsafeRow,
      * CAN NOT call setNullAt() for decimal column on UnsafeRow, call setDecimal(i, null, precision).
      */
-    //public void setDecimal(int i, value: Decimal, precision: Int): Unit = update(i, value)
+    public void setDecimal(int i, Decimal value , int precision) {
+        update(i, value);
+    }
 
     public void setInterval(int i, CalendarInterval value) {
         update(i, value);

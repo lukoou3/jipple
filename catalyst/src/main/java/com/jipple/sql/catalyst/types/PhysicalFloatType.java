@@ -2,7 +2,7 @@ package com.jipple.sql.catalyst.types;
 
 import java.util.Comparator;
 
-public class PhysicalFloatType extends PhysicalDataType<Float>  {
+public class PhysicalFloatType extends PhysicalDataType<Float> implements PhysicalPrimitiveType {
     @Override
     public Comparator<Float> comparator() {
         return Comparator.naturalOrder();

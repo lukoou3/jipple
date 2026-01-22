@@ -26,6 +26,13 @@ public class DecimalType  extends FractionalType {
         this(precision, 0);
     }
 
+    public int precision() {
+        return precision;
+    }
+
+    public int scale() {
+        return scale;
+    }
 
     @Override
     public int defaultSize() {
@@ -136,4 +143,5 @@ public class DecimalType  extends FractionalType {
             return false;
         }
     }
+
 }

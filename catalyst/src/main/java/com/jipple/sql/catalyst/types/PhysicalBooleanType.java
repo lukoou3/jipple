@@ -2,7 +2,7 @@ package com.jipple.sql.catalyst.types;
 
 import java.util.Comparator;
 
-public class PhysicalBooleanType extends PhysicalDataType<Boolean> {
+public class PhysicalBooleanType extends PhysicalDataType<Boolean> implements PhysicalPrimitiveType {
     @Override
     public Comparator<Boolean> comparator() {
         return Comparator.naturalOrder();
