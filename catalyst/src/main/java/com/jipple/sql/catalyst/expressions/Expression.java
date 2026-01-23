@@ -68,6 +68,28 @@ public abstract class Expression extends TreeNode<Expression> {
         return children().stream().allMatch(Expression::resolved);
     }
 
+  /**
+   * Returns true when two expressions will always compute the same result, even if they differ
+   * cosmetically (i.e. capitalization of names in attributes may be different).
+   *
+   * See [[Canonicalize]] for more details.
+   */
+    public final boolean semanticEquals(Expression other) {
+        // TODO: deterministic && other.deterministic && canonicalized == other.canonicalized
+        return deterministic() && other.deterministic() && this.equals(other);
+    }
+
+  /**
+   * Returns a `hashCode` for the calculation performed by this expression. Unlike the standard
+   * `hashCode`, an attempt has been made to eliminate cosmetic differences.
+   *
+   * See [[Canonicalize]] for more details.
+   */
+    public int semanticHash() {
+        // TODO: canonicalized.hashCode()
+        return hashCode();
+    }
+
     public TypeCheckResult checkInputDataTypes() {
         if (expectsInputTypes().isEmpty()) {
             return TypeCheckResult.typeCheckSuccess();

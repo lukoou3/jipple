@@ -9,16 +9,11 @@ public interface ExprValue extends JavaCode {
     default boolean isPrimitive() {
         return javaType().isPrimitive();
     }
-}
 
-/**
- * Utility functions for ExprValue.
- */
-class ExprValueUtils {
     /**
      * Converts an ExprValue to a String (its code).
      */
-    public static String exprValueToString(ExprValue exprValue) {
+    static String exprValueToString(ExprValue exprValue) {
         return exprValue.code();
     }
 }
