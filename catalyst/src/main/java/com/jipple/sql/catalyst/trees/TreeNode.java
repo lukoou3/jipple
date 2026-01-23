@@ -23,6 +23,11 @@ public abstract class TreeNode<BaseType extends TreeNode<BaseType>> implements W
 
     public abstract Object[] args();
 
+    public void copyTagsFrom(BaseType other) {
+        // TODO: copy tags
+    }
+
+
     public abstract List<BaseType> children();
 
     public Set<TreeNode<BaseType>> containsChild() {

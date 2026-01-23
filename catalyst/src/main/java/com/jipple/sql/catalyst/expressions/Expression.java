@@ -6,6 +6,7 @@ import com.jipple.sql.SQLConf;
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
 import com.jipple.sql.catalyst.expressions.codegen.*;
+import com.jipple.sql.catalyst.trees.CurrentOrigin;
 import com.jipple.sql.catalyst.trees.TreeNode;
 import com.jipple.sql.types.AbstractDataType;
 import com.jipple.sql.types.DataType;
@@ -43,15 +44,58 @@ public abstract class Expression extends TreeNode<Expression> {
 
     public abstract boolean nullable();
 
-    public boolean stateful() {
-        return false;
-    }
-
     public Option<List<AbstractDataType>> expectsInputTypes() {
         return Option.none();
     }
 
     public abstract DataType dataType();
+
+    /**
+     * Returns true if the expression contains mutable state.
+     *
+     * A stateful expression should never be evaluated multiple times for a single row. This should
+     * only be a problem for interpreted execution. This can be prevented by creating fresh copies
+     * of the stateful expression before execution. A common example to trigger this issue:
+     * {{{
+     *   val rand = functions.rand()
+     *   df.select(rand, rand) // These 2 rand should not share a state.
+     * }}}
+     */
+    public boolean stateful() {
+        return false;
+    }
+
+    /**
+     * Returns a copy of this expression where all stateful expressions are replaced with fresh
+     * uninitialized copies. If the expression contains no stateful expressions then the original
+     * expression is returned.
+     */
+    public Expression freshCopyIfContainsStatefulExpression() {
+        List<Expression> childrenIndexedSeq = children();
+        List<Expression> newChildren = childrenIndexedSeq.stream()
+                .map(Expression::freshCopyIfContainsStatefulExpression)
+                .collect(Collectors.toList());
+        // A more efficient version of `childrenIndexedSeq.zip(newChildren).exists(_ ne _)`
+        boolean anyChildChanged = false;
+        int size = newChildren.size();
+        int i = 0;
+        while (!anyChildChanged && i < size) {
+            anyChildChanged |= (childrenIndexedSeq.get(i) != newChildren.get(i));
+            i += 1;
+        }
+        // If the children contain stateful expressions and get copied, or this expression is stateful,
+        // copy this expression with the new children.
+        if (anyChildChanged || stateful()) {
+            return CurrentOrigin.withOrigin(origin(), () -> {
+                Expression res = withNewChildrenInternal(newChildren);
+                res.copyTagsFrom(this);
+                return res;
+            });
+        } else {
+            return this;
+        }
+    }
+
 
     /** Returns the result of evaluating this expression on a given input Row */
     public abstract Object eval(InternalRow input);

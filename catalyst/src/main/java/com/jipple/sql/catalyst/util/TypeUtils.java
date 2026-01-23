@@ -2,6 +2,7 @@ package com.jipple.sql.catalyst.util;
 
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
 import com.jipple.sql.catalyst.analysis.rule.typecoerce.TypeCoercion;
+import com.jipple.sql.catalyst.expressions.OrderUtils;
 import com.jipple.sql.catalyst.types.PhysicalDataType;
 import com.jipple.sql.types.DataType;
 
@@ -25,8 +26,18 @@ public class TypeUtils {
         }
     }
 
-  public static Comparator<Object> getInterpretedComparator(DataType t) {
-      return (Comparator<Object>) PhysicalDataType.of(t).comparator();
-  }
+    public static TypeCheckResult checkForOrderingExpr(DataType dt, String caller) {
+      if (OrderUtils.isOrderable(dt)) {
+        return TypeCheckResult.typeCheckSuccess();
+      } else {
+        return TypeCheckResult.dataTypeMismatch(
+            "INVALID_ORDERING_TYPE",
+            Map.of("functionName", caller, "dataType", dt.simpleString()));
+      }
+    }
+
+    public static Comparator<Object> getInterpretedComparator(DataType t) {
+        return (Comparator<Object>) PhysicalDataType.of(t).comparator();
+    }
 
 }

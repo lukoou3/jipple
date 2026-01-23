@@ -1,5 +1,7 @@
 package com.jipple.util;
 
+import java.util.function.Supplier;
+
 public class Utils {
 
     /**
@@ -16,6 +18,32 @@ public class Utils {
      */
     public static boolean isTesting() {
         return System.getenv("JIPPLE_TESTING") != null || System.getProperty("jipple.testing") != null;
+    }
+
+    /**
+     * Tests an expression, throwing an AssertionError if false.
+     */
+    public static void assertCondition(boolean assertion) {
+        if (!assertion) {
+            throw new AssertionError("assertion failed");
+        }
+    }
+
+    /**
+     * Tests an expression, throwing an AssertionError if false.
+     *
+     * @param message a message to include in the failure message
+     */
+    public static void assertCondition(boolean assertion, Object message) {
+        if (!assertion) {
+            throw new AssertionError("assertion failed: " + message);
+        }
+    }
+
+    public static void assertCondition(boolean assertion, Supplier<?> message) {
+        if (!assertion) {
+            throw new AssertionError("assertion failed: " + message.get());
+        }
     }
 
 }
