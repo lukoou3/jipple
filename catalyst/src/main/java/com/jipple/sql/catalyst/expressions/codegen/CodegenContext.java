@@ -256,8 +256,7 @@ public class CodegenContext {
             mutableStateNames.add(varName);
             return varName;
         } else {
-            MutableStateArrays arrays = arrayCompactedMutableStates.computeIfAbsent(
-                    javaType, k -> new MutableStateArrays());
+            MutableStateArrays arrays = arrayCompactedMutableStates.computeIfAbsent(javaType, k -> new MutableStateArrays());
             String element = arrays.getNextSlot();
             String initCode = initFunc.apply(element);
             mutableStateInitCode.add(initCode);
@@ -313,7 +312,7 @@ public class CodegenContext {
     public ExprCode addBufferedState(DataType dataType, String variableName, String initCode) {
         String value = addMutableState(CodeGeneratorUtils.javaType(dataType), variableName);
         Block code;
-        // TODO: 实现 UserDefinedType.sqlType 方法
+        // 本来就不支持UserDefinedType类型
         DataType sqlType = dataType; // UserDefinedType.sqlType(dataType);
         if (sqlType instanceof StringType) {
             code = Block.block(

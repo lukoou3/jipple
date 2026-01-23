@@ -2,8 +2,10 @@ package com.jipple.sql.catalyst.expressions;
 
 import com.jipple.collection.Option;
 import com.jipple.error.JippleException;
+import com.jipple.sql.SQLConf;
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
+import com.jipple.sql.catalyst.expressions.codegen.*;
 import com.jipple.sql.catalyst.trees.TreeNode;
 import com.jipple.sql.types.AbstractDataType;
 import com.jipple.sql.types.DataType;
@@ -11,6 +13,7 @@ import com.jipple.sql.types.LongType;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -55,6 +58,112 @@ public abstract class Expression extends TreeNode<Expression> {
 
     public Object eval() {
         return eval(null);
+    }
+
+    /**
+     * Returns an [[ExprCode]], that contains the Java source code to generate the result of
+     * evaluating the expression on an input row.
+     *
+     * @param ctx a [[CodegenContext]]
+     * @return [[ExprCode]]
+     */
+    public ExprCode genCode(CodegenContext ctx) {
+        ExpressionEquals exprEquals = new ExpressionEquals(this);
+        SubExprEliminationState subExprState = ctx.subExprEliminationExprs.get(exprEquals);
+        
+        if (subExprState != null) {
+            // This expression is repeated which means that the code to evaluate it has already been added
+            // as a function before. In that case, we just re-use it.
+            return new ExprCode(
+                    ctx.registerComment(this.toString()),
+                    subExprState.eval.isNull,
+                    subExprState.eval.value);
+        } else {
+            String isNull = ctx.freshName("isNull");
+            String value = ctx.freshName("value");
+            ExprCode eval = doGenCode(ctx, ExprCode.of(
+                    JavaCode.isNullVariable(isNull),
+                    JavaCode.variable(value, dataType())));
+            reduceCodeSize(ctx, eval);
+            if (!eval.code.toString().isEmpty()) {
+                // Add `this` in the comment.
+                Block commentBlock = ctx.registerComment(this.toString());
+                return eval.copy(commentBlock.plus(eval.code));
+            } else {
+                return eval;
+            }
+        }
+    }
+
+    private void reduceCodeSize(CodegenContext ctx, ExprCode eval) {
+        // TODO: support whole stage codegen too
+        int splitThreshold = SQLConf.get().methodSplitThreshold();
+        if (eval.code.length() > splitThreshold && ctx.INPUT_ROW != null && ctx.currentVars == null) {
+            String setIsNull;
+            if (!(eval.isNull instanceof LiteralValue)) {
+                String globalIsNull = ctx.addMutableState(CodeGenerator.JAVA_BOOLEAN, "globalIsNull");
+                ExprValue localIsNull = eval.isNull;
+                eval.isNull = JavaCode.isNullGlobal(globalIsNull);
+                setIsNull = CodeGeneratorUtils.template(
+                        "${globalIsNull} = ${localIsNull};",
+                        Map.of(
+                                "globalIsNull", globalIsNull,
+                                "localIsNull", localIsNull.toString()
+                        )
+                );
+            } else {
+                setIsNull = "";
+            }
+
+            String javaType = CodeGenerator.javaType(dataType());
+            String newValue = ctx.freshName("value");
+
+            String funcName = ctx.freshName(nodeName());
+            String funcFullName = ctx.addNewFunction(funcName,
+                    CodeGeneratorUtils.template(
+                            """
+                                    private ${javaType} ${funcName}(InternalRow ${inputRow}) {
+                                      ${evalCode}
+                                      ${setIsNull}
+                                      return ${evalValue};
+                                    }
+                                    """,
+                            Map.of(
+                                    "javaType", javaType,
+                                    "funcName", funcName,
+                                    "inputRow", ctx.INPUT_ROW,
+                                    "evalCode", eval.code.toString(),
+                                    "setIsNull", setIsNull,
+                                    "evalValue", eval.value.toString()
+                            )
+                    ));
+
+            eval.value = JavaCode.variable(newValue, dataType());
+            eval.code = Block.block(
+                    "${javaType} ${newValue} = ${funcFullName}(${inputRow});",
+                    Map.of(
+                            "javaType", javaType,
+                            "newValue", newValue,
+                            "funcFullName", funcFullName,
+                            "inputRow", ctx.INPUT_ROW
+                    )
+            );
+        }
+    }
+
+    /**
+     * Returns Java source code that can be compiled to evaluate this expression.
+     * The default behavior is to call the eval method of the expression. Concrete expression
+     * implementations should override this to do actual code generation.
+     *
+     * @param ctx a [[CodegenContext]]
+     * @param ev an [[ExprCode]] with unique terms.
+     * @return an [[ExprCode]] containing the Java source code to generate the given expression
+     */
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        // Default implementation: return a simple ExprCode
+        // Subclasses should override this method to provide actual code generation
+        return ev;
     }
 
     public boolean resolved() {

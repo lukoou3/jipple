@@ -27,7 +27,7 @@ public class ExprCode implements Serializable {
         this.value = value;
     }
 
-    public static ExprCode apply(ExprValue isNull, ExprValue value) {
+    public static ExprCode of(ExprValue isNull, ExprValue value) {
         return new ExprCode(EmptyBlock.INSTANCE, isNull, value);
     }
 
@@ -63,6 +63,24 @@ public class ExprCode implements Serializable {
         result = 31 * result + (isNull != null ? isNull.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
         return result;
+    }
+
+    /**
+     * Creates a copy of this ExprCode with optionally modified fields.
+     */
+    public ExprCode copy(Block code, ExprValue isNull, ExprValue value) {
+        return new ExprCode(code, isNull, value);
+    }
+
+    /**
+     * Creates a copy of this ExprCode with a new code block.
+     */
+    public ExprCode copy(Block code) {
+        return copy(code, this.isNull, this.value);
+    }
+
+    public ExprCode copy(Block code, ExprValue isNull) {
+        return copy(code, isNull, this.value);
     }
 
     @Override

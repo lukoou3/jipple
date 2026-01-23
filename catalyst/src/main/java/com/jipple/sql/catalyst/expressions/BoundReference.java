@@ -1,8 +1,13 @@
 package com.jipple.sql.catalyst.expressions;
 
+import com.google.common.base.Preconditions;
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.InternalRowAccessor;
+import com.jipple.sql.catalyst.expressions.codegen.*;
+import com.jipple.sql.catalyst.expressions.codegen.CodeGeneratorUtils;
 import com.jipple.sql.types.DataType;
+
+import java.util.Map;
 
 public class BoundReference extends LeafExpression {
     public final int ordinal;
@@ -46,4 +51,48 @@ public class BoundReference extends LeafExpression {
         return accessor.get(input, ordinal);
     }
 
+    @Override
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        if (ctx.currentVars != null  && ctx.currentVars.get(ordinal) != null) {
+            ExprCode oev = ctx.currentVars.get(ordinal);
+            ev.isNull = oev.isNull;
+            ev.value = oev.value;
+            return ev.copy(oev.code);
+        } else {
+            Preconditions.checkArgument(ctx.INPUT_ROW != null, "INPUT_ROW and currentVars cannot both be null.");
+            String javaType = JavaCode.javaType(dataType).code();
+            String value = CodeGeneratorUtils.getValue(ctx.INPUT_ROW, dataType, String.valueOf(ordinal));
+            if (nullable) {
+                return ev.copy(Block.block(
+                        """
+                                boolean ${isNull} = ${inputRow}.isNullAt(${ordinal});
+                                ${javaType} ${value} = ${isNull} ?
+                                  ${defaultValue} : (${getValue});
+                                """,
+                        Map.of(
+                                "isNull", ev.isNull.toString(),
+                                "inputRow", ctx.INPUT_ROW,
+                                "ordinal", ordinal,
+                                "javaType", javaType,
+                                "value", ev.value.toString(),
+                                "defaultValue", CodeGeneratorUtils.defaultValue(dataType()),
+                                "getValue", value
+                        )
+                ));
+            } else {
+                return ev.copy(
+                        Block.block(
+                                "${javaType} ${value} = ${getValue};",
+                                Map.of(
+                                        "javaType", javaType,
+                                        "value", ev.value.toString(),
+                                        "getValue", value
+                                )
+                        ),
+                        FalseLiteral.INSTANCE,
+                        null
+                );
+            }
+        }
+    }
 }
