@@ -139,9 +139,9 @@ public abstract class BinaryExpression extends Expression implements BinaryLike<
                             ${nullSafeEval}
                             """,
                     Map.of(
-                            "isNull", ev.isNull.toString(),
+                            "isNull", ev.isNull,
                             "javaType", CodeGeneratorUtils.javaType(dataType()),
-                            "value", ev.value.toString(),
+                            "value", ev.value,
                             "defaultValue", CodeGeneratorUtils.defaultValue(dataType()),
                             "nullSafeEval", nullSafeEval
                     )
@@ -155,10 +155,10 @@ public abstract class BinaryExpression extends Expression implements BinaryLike<
                                     ${resultCode}
                                     """,
                             Map.of(
-                                    "leftCode", leftGen.code.toString(),
-                                    "rightCode", rightGen.code.toString(),
+                                    "leftCode", leftGen.code,
+                                    "rightCode", rightGen.code,
                                     "javaType", CodeGeneratorUtils.javaType(dataType()),
-                                    "value", ev.value.toString(),
+                                    "value", ev.value,
                                     "defaultValue", CodeGeneratorUtils.defaultValue(dataType()),
                                     "resultCode", resultCode
                             )

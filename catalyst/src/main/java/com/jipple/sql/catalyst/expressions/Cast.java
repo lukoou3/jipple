@@ -3,14 +3,26 @@ package com.jipple.sql.catalyst.expressions;
 import com.jipple.collection.Option;
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
+import com.jipple.sql.catalyst.expressions.codegen.Block;
+import com.jipple.sql.catalyst.expressions.codegen.CodeGeneratorUtils;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.EmptyBlock;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
+import com.jipple.sql.catalyst.expressions.codegen.ExprValue;
+import com.jipple.sql.catalyst.expressions.codegen.FalseLiteral;
+import com.jipple.sql.catalyst.expressions.codegen.Inline;
+import com.jipple.sql.catalyst.expressions.codegen.JavaCode;
 import com.jipple.sql.catalyst.util.*;
 import com.jipple.sql.errors.QueryExecutionErrors;
 import com.jipple.sql.types.*;
 import com.jipple.unsafe.UTF8StringBuilder;
 import com.jipple.unsafe.types.UTF8String;
 
-import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
@@ -539,18 +551,14 @@ public class Cast extends UnaryExpression implements TimeZoneAwareExpression {
                 int size = array.numElements();
                 if (size > 0) {
                     if (array.isNullAt(0)) {
-                        if (!nullString.isEmpty()) {
-                            builder.append(nullString);
-                        }
+                        builder.append(nullString);
                     } else {
                         builder.append((UTF8String) toUTF8String.apply(array.get(0, arrayType.elementType)));
                     }
                     for (int i = 1; i < size; i++) {
                         builder.append(",");
                         if (array.isNullAt(i)) {
-                            if (!nullString.isEmpty()) {
-                                builder.append(" " + nullString);
-                            }
+                            builder.append(" " + nullString);
                         } else {
                             builder.append(" ");
                             builder.append((UTF8String) toUTF8String.apply(array.get(i, arrayType.elementType)));
@@ -574,9 +582,7 @@ public class Cast extends UnaryExpression implements TimeZoneAwareExpression {
                     builder.append((UTF8String) keyToUTF8String.apply(keyArray.get(0, mapType.keyType)));
                     builder.append(" ->");
                     if (valueArray.isNullAt(0)) {
-                        if (!nullString.isEmpty()) {
-                            builder.append(" " + nullString);
-                        }
+                        builder.append(" " + nullString);
                     } else {
                         builder.append(" ");
                         builder.append((UTF8String) valueToUTF8String.apply(valueArray.get(0, mapType.valueType)));
@@ -586,9 +592,7 @@ public class Cast extends UnaryExpression implements TimeZoneAwareExpression {
                         builder.append((UTF8String) keyToUTF8String.apply(keyArray.get(i, mapType.keyType)));
                         builder.append(" ->");
                         if (valueArray.isNullAt(i)) {
-                            if (!nullString.isEmpty()) {
-                                builder.append(" " + nullString);
-                            }
+                            builder.append(" " + nullString);
                         } else {
                             builder.append(" ");
                             builder.append((UTF8String) valueToUTF8String.apply(valueArray.get(i, mapType.valueType)));
@@ -614,18 +618,14 @@ public class Cast extends UnaryExpression implements TimeZoneAwareExpression {
                 int size = row.numFields();
                 if (size > 0) {
                     if (row.isNullAt(0)) {
-                        if (!nullString.isEmpty()) {
-                            builder.append(nullString);
-                        }
+                        builder.append(nullString);
                     } else {
                         builder.append((UTF8String) toUTF8StringFuncs[0].apply(row.get(0, dataTypes[0])));
                     }
                     for (int i = 1; i < size; i++) {
                         builder.append(",");
                         if (row.isNullAt(i)) {
-                            if (!nullString.isEmpty()) {
-                                builder.append(" " + nullString);
-                            }
+                            builder.append(" " + nullString);
                         } else {
                             builder.append(" ");
                             builder.append((UTF8String) toUTF8StringFuncs[i].apply(row.get(i, dataTypes[i])));
@@ -776,6 +776,1471 @@ public class Cast extends UnaryExpression implements TimeZoneAwareExpression {
     @Override
     protected Object nullSafeEval(Object input) {
         return cast().apply(input);
+    }
+
+    @Override
+    public ExprCode genCode(CodegenContext ctx) {
+        // If the cast does not change the structure, then we don't really need to cast anything.
+        // We can return what the children return. Same thing should happen in the interpreted path.
+        if (DataType.equalsStructurally(child.dataType(), dataType)) {
+            return child.genCode(ctx);
+        }
+        return super.genCode(ctx);
+    }
+
+    @Override
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        ExprCode eval = child.genCode(ctx);
+        CastFunction nullSafeCast = nullSafeCastFunction(child.dataType(), dataType, ctx);
+        Block code = castCode(ctx, eval.value, eval.isNull, ev.value, ev.isNull, dataType, nullSafeCast);
+        return ev.copy(eval.code.plus(code));
+    }
+
+    @FunctionalInterface
+    private interface CastFunction {
+        Block apply(ExprValue input, ExprValue result, ExprValue resultIsNull);
+    }
+
+    @FunctionalInterface
+    private interface ToStringCode {
+        Block apply(ExprValue input, ExprValue result);
+    }
+
+    private Block castCode(
+            CodegenContext ctx,
+            ExprValue input,
+            ExprValue inputIsNull,
+            ExprValue result,
+            ExprValue resultIsNull,
+            DataType resultType,
+            CastFunction cast) {
+        String javaType = CodeGeneratorUtils.javaType(resultType);
+        Block castBody = cast.apply(input, result, resultIsNull);
+        return Block.block(
+                """
+                        boolean ${resultIsNull} = ${inputIsNull};
+                        ${javaType} ${result} = ${defaultValue};
+                        if (!${inputIsNull}) {
+                          ${castBody}
+                        }
+                        """,
+                Map.ofEntries(
+                        Map.entry("resultIsNull", resultIsNull),
+                        Map.entry("inputIsNull", inputIsNull),
+                        Map.entry("javaType", javaType),
+                        Map.entry("result", result),
+                        Map.entry("defaultValue", CodeGeneratorUtils.defaultValue(resultType)),
+                        Map.entry("castBody", castBody)
+                )
+        );
+    }
+
+    private CastFunction nullSafeCastFunction(
+            DataType from,
+            DataType to,
+            CodegenContext ctx) {
+        if (from instanceof NullType) {
+            return (c, evPrim, evNull) -> Block.block(
+                    "${evNull} = true;",
+                    Map.ofEntries(
+                            Map.entry("evNull", evNull)
+                    )
+            );
+        }
+        if (from.equals(to)) {
+            return (c, evPrim, evNull) -> Block.block(
+                    "${evPrim} = ${input};",
+                    Map.ofEntries(
+                            Map.entry("evPrim", evPrim),
+                            Map.entry("input", c)
+                    )
+            );
+        }
+        CastFunction cast = null;
+        if (to instanceof StringType) {
+            cast = castToStringCode(from, ctx);
+        } else if (to instanceof BinaryType) {
+            cast = castToBinaryCode(from);
+        } else if (to instanceof DateType) {
+            cast = castToDateCode(from, ctx);
+        } else if (to instanceof DecimalType decimalType) {
+            cast = castToDecimalCode(from, decimalType, ctx);
+        } else if (to instanceof TimestampType) {
+            cast = castToTimestampCode(from, ctx);
+        } else if (to instanceof TimestampNTZType) {
+            cast = castToTimestampNTZCode(from, ctx);
+        } else if (to instanceof BooleanType) {
+            cast = castToBooleanCode(from, ctx);
+        } else if (to instanceof IntegerType) {
+            cast = castToIntCode(from, ctx);
+        } else if (to instanceof FloatType) {
+            cast = castToFloatCode(from, ctx);
+        } else if (to instanceof LongType) {
+            cast = castToLongCode(from, ctx);
+        } else if (to instanceof DoubleType) {
+            cast = castToDoubleCode(from, ctx);
+        } else if (to instanceof ArrayType array && from instanceof ArrayType fromArray) {
+            cast = castArrayCode(fromArray.elementType, array.elementType, ctx);
+        } else if (to instanceof MapType map && from instanceof MapType fromMap) {
+            cast = castMapCode(fromMap, map, ctx);
+        } else if (to instanceof StructType struct && from instanceof StructType fromStruct) {
+            cast = castStructCode(fromStruct, struct, ctx);
+        }
+        if (cast != null) {
+            return cast;
+        }
+        throw new UnsupportedOperationException("Cannot cast " + from + " to " + to);
+    }
+
+    private CastFunction castToStringCode(DataType from, CodegenContext ctx) {
+        ToStringCode toStringCode = castToStringCodeInternal(from, ctx);
+        return (c, evPrim, evNull) -> toStringCode.apply(c, evPrim);
+    }
+
+    private ToStringCode castToStringCodeInternal(DataType from, CodegenContext ctx) {
+        String utf8StringClass = UTF8String.class.getName();
+        if (from instanceof StringType) {
+            return (c, evPrim) -> Block.block(
+                    "${value} = (${utf8String}) ${input};",
+                    Map.ofEntries(
+                            Map.entry("value", evPrim),
+                            Map.entry("utf8String", utf8StringClass),
+                            Map.entry("input", c)
+                    )
+            );
+        }
+        if (from instanceof BinaryType) {
+            return (c, evPrim) -> Block.block(
+                    "${value} = ${utf8String}.fromBytes((byte[]) ${input});",
+                    Map.ofEntries(
+                            Map.entry("value", evPrim),
+                            Map.entry("utf8String", utf8StringClass),
+                            Map.entry("input", c)
+                    )
+            );
+        }
+        if (from instanceof DateType) {
+            String formatter = ctx.addReferenceObj("dateFormatter",
+                    DateFormatter.getFormatter(),
+                    DateFormatter.class.getName());
+            return (c, evPrim) -> Block.block(
+                    "${value} = ${utf8String}.fromString(${formatter}.format((Integer) ${input}));",
+                    Map.ofEntries(
+                            Map.entry("value", evPrim),
+                            Map.entry("utf8String", utf8StringClass),
+                            Map.entry("formatter", formatter),
+                            Map.entry("input", c)
+                    )
+            );
+        }
+        if (from instanceof TimestampType) {
+            ZoneId zid = zoneId();
+            String formatter = ctx.addReferenceObj(
+                    "timestampFormatter",
+                    TimestampFormatter.getFormatter(zid),
+                    TimestampFormatter.class.getName());
+            return (c, evPrim) -> Block.block(
+                    "${value} = ${utf8String}.fromString(${formatter}.format((Long) ${input}));",
+                    Map.ofEntries(
+                            Map.entry("value", evPrim),
+                            Map.entry("utf8String", utf8StringClass),
+                            Map.entry("formatter", formatter),
+                            Map.entry("input", c)
+                    )
+            );
+        }
+        if (from instanceof TimestampNTZType) {
+            String formatter = ctx.addReferenceObj(
+                    "timestampNTZFormatter",
+                    TimestampFormatter.getFormatter(ZoneOffset.UTC),
+                    TimestampFormatter.class.getName());
+            return (c, evPrim) -> Block.block(
+                    "${value} = ${utf8String}.fromString(${formatter}.format((Long) ${input}));",
+                    Map.ofEntries(
+                            Map.entry("value", evPrim),
+                            Map.entry("utf8String", utf8StringClass),
+                            Map.entry("formatter", formatter),
+                            Map.entry("input", c)
+                    )
+            );
+        }
+        if (from instanceof ArrayType arrayType) {
+            return (c, evPrim) -> {
+                ExprValue buffer = ctx.freshVariable("buffer", UTF8StringBuilder.class);
+                Inline bufferClass = JavaCode.javaType(UTF8StringBuilder.class);
+                Block writeArrayElemCode = writeArrayToStringBuilder(arrayType.elementType, c, buffer, ctx);
+                return Block.block(
+                        """
+                                ${bufferClass} ${buffer} = new ${bufferClass}();
+                                ${writeArrayElemCode};
+                                ${value} = ${buffer}.build();
+                                """,
+                        Map.ofEntries(
+                                Map.entry("bufferClass", bufferClass),
+                                Map.entry("buffer", buffer),
+                                Map.entry("writeArrayElemCode", writeArrayElemCode),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            };
+        }
+        if (from instanceof MapType mapType) {
+            return (c, evPrim) -> {
+                ExprValue buffer = ctx.freshVariable("buffer", UTF8StringBuilder.class);
+                Inline bufferClass = JavaCode.javaType(UTF8StringBuilder.class);
+                Block writeMapElemCode = writeMapToStringBuilder(mapType.keyType, mapType.valueType, c, buffer, ctx);
+                return Block.block(
+                        """
+                                ${bufferClass} ${buffer} = new ${bufferClass}();
+                                ${writeMapElemCode};
+                                ${value} = ${buffer}.build();
+                                """,
+                        Map.ofEntries(
+                                Map.entry("bufferClass", bufferClass),
+                                Map.entry("buffer", buffer),
+                                Map.entry("writeMapElemCode", writeMapElemCode),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            };
+        }
+        if (from instanceof StructType structType) {
+            return (c, evPrim) -> {
+                ExprValue row = ctx.freshVariable("row", InternalRow.class);
+                ExprValue buffer = ctx.freshVariable("buffer", UTF8StringBuilder.class);
+                Inline bufferClass = JavaCode.javaType(UTF8StringBuilder.class);
+                DataType[] fieldTypes = new DataType[structType.fields.length];
+                for (int i = 0; i < structType.fields.length; i++) {
+                    fieldTypes[i] = structType.fields[i].dataType;
+                }
+                Block writeStructCode = writeStructToStringBuilder(fieldTypes, row, buffer, ctx);
+                return Block.block(
+                        """
+                                InternalRow ${row} = ${input};
+                                ${bufferClass} ${buffer} = new ${bufferClass}();
+                                ${writeStructCode}
+                                ${value} = ${buffer}.build();
+                                """,
+                        Map.ofEntries(
+                                Map.entry("row", row),
+                                Map.entry("input", c),
+                                Map.entry("bufferClass", bufferClass),
+                                Map.entry("buffer", buffer),
+                                Map.entry("writeStructCode", writeStructCode),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            };
+        }
+        if (from instanceof DecimalType) {
+            return (c, evPrim) -> Block.block(
+                    "${value} = ${utf8String}.fromString(String.valueOf(${input}));",
+                    Map.ofEntries(
+                            Map.entry("value", evPrim),
+                            Map.entry("utf8String", utf8StringClass),
+                            Map.entry("input", c)
+                    )
+            );
+        }
+        if (from instanceof BooleanType || isSimpleNumeric(from)) {
+            return (c, evPrim) -> Block.block(
+                    "${value} = ${utf8String}.fromString(String.valueOf(${input}));",
+                    Map.ofEntries(
+                            Map.entry("value", evPrim),
+                            Map.entry("utf8String", utf8StringClass),
+                            Map.entry("input", c)
+                    )
+            );
+        }
+        throw new UnsupportedOperationException("Cannot cast " + from + " to string");
+    }
+
+    private Block appendNull(ExprValue buffer, boolean isFirstElement) {
+        if (Cast.nullString.isEmpty()) {
+            return EmptyBlock.INSTANCE;
+        }
+        String literal = isFirstElement ? Cast.nullString : " " + Cast.nullString;
+        return Block.block(
+                "${buffer}.append(\"${literal}\");",
+                Map.ofEntries(
+                        Map.entry("buffer", buffer),
+                        Map.entry("literal", literal)
+                )
+        );
+    }
+
+    private Block writeArrayToStringBuilder(
+            DataType elementType,
+            ExprValue array,
+            ExprValue buffer,
+            CodegenContext ctx) {
+        ToStringCode elementToStringCode = castToStringCodeInternal(elementType, ctx);
+        String funcName = ctx.freshName("elementToString");
+        ExprValue element = JavaCode.variable("element", elementType);
+        ExprValue elementStr = JavaCode.variable("elementStr", StringType.INSTANCE);
+        String elementJavaType = CodeGeneratorUtils.javaType(elementType);
+        Inline elementToStringFunc = new Inline(
+                ctx.addNewFunction(
+                        funcName,
+                        CodeGeneratorUtils.template(
+                                """
+                                        private UTF8String ${funcName}(${elementJavaType} ${element}) {
+                                          UTF8String ${elementStr} = null;
+                                          ${elementToStringCode}
+                                          return ${elementStr};
+                                        }
+                                        """,
+                                Map.ofEntries(
+                                        Map.entry("funcName", funcName),
+                                        Map.entry("elementJavaType", elementJavaType),
+                                        Map.entry("element", element),
+                                        Map.entry("elementStr", elementStr),
+                                        Map.entry("elementToStringCode", elementToStringCode.apply(element, elementStr))
+                                )
+                        )
+                )
+        );
+        ExprValue loopIndex = ctx.freshVariable("loopIndex", IntegerType.INSTANCE);
+        String getFirst = CodeGeneratorUtils.getValue(array.toString(), elementType, "0");
+        String getLoop = CodeGeneratorUtils.getValue(array.toString(), elementType, loopIndex.toString());
+        return Block.block(
+                """
+                        ${buffer}.append("[");
+                        if (${array}.numElements() > 0) {
+                          if (${array}.isNullAt(0)) {
+                            ${appendNullFirst}
+                          } else {
+                            ${buffer}.append(${elementToStringFunc}(${getFirst}));
+                          }
+                          for (int ${loopIndex} = 1; ${loopIndex} < ${array}.numElements(); ${loopIndex}++) {
+                            ${buffer}.append(",");
+                            if (${array}.isNullAt(${loopIndex})) {
+                              ${appendNull}
+                            } else {
+                              ${buffer}.append(" ");
+                              ${buffer}.append(${elementToStringFunc}(${getLoop}));
+                            }
+                          }
+                        }
+                        ${buffer}.append("]");
+                        """,
+                Map.ofEntries(
+                        Map.entry("buffer", buffer),
+                        Map.entry("array", array),
+                        Map.entry("appendNullFirst", appendNull(buffer, true)),
+                        Map.entry("appendNull", appendNull(buffer, false)),
+                        Map.entry("elementToStringFunc", elementToStringFunc),
+                        Map.entry("getFirst", getFirst),
+                        Map.entry("loopIndex", loopIndex),
+                        Map.entry("getLoop", getLoop)
+                )
+        );
+    }
+
+    private Block writeMapToStringBuilder(
+            DataType keyType,
+            DataType valueType,
+            ExprValue map,
+            ExprValue buffer,
+            CodegenContext ctx) {
+        Inline keyToStringFunc = dataToStringFunc("keyToString", keyType, ctx);
+        Inline valueToStringFunc = dataToStringFunc("valueToString", valueType, ctx);
+        ExprValue loopIndex = ctx.freshVariable("loopIndex", IntegerType.INSTANCE);
+        String mapKeyArray = map + ".keyArray()";
+        String mapValueArray = map + ".valueArray()";
+        String getMapFirstKey = CodeGeneratorUtils.getValue(mapKeyArray, keyType, "0");
+        String getMapFirstValue = CodeGeneratorUtils.getValue(mapValueArray, valueType, "0");
+        String getMapKeyArray = CodeGeneratorUtils.getValue(mapKeyArray, keyType, loopIndex.toString());
+        String getMapValueArray = CodeGeneratorUtils.getValue(mapValueArray, valueType, loopIndex.toString());
+        return Block.block(
+                """
+                        ${buffer}.append("${leftBracket}");
+                        if (${map}.numElements() > 0) {
+                          ${buffer}.append(${keyToStringFunc}(${getMapFirstKey}));
+                          ${buffer}.append(" ->");
+                          if (${map}.valueArray().isNullAt(0)) {
+                            ${appendNull}
+                          } else {
+                            ${buffer}.append(" ");
+                            ${buffer}.append(${valueToStringFunc}(${getMapFirstValue}));
+                          }
+                          for (int ${loopIndex} = 1; ${loopIndex} < ${map}.numElements(); ${loopIndex}++) {
+                            ${buffer}.append(", ");
+                            ${buffer}.append(${keyToStringFunc}(${getMapKeyArray}));
+                            ${buffer}.append(" ->");
+                            if (${map}.valueArray().isNullAt(${loopIndex})) {
+                              ${appendNull}
+                            } else {
+                              ${buffer}.append(" ");
+                              ${buffer}.append(${valueToStringFunc}(${getMapValueArray}));
+                            }
+                          }
+                        }
+                        ${buffer}.append("${rightBracket}");
+                        """,
+                Map.ofEntries(
+                        Map.entry("buffer", buffer),
+                        Map.entry("map", map),
+                        Map.entry("leftBracket", Cast.leftBracket),
+                        Map.entry("rightBracket", Cast.rightBracket),
+                        Map.entry("appendNull", appendNull(buffer, false)),
+                        Map.entry("keyToStringFunc", keyToStringFunc),
+                        Map.entry("valueToStringFunc", valueToStringFunc),
+                        Map.entry("getMapFirstKey", getMapFirstKey),
+                        Map.entry("getMapFirstValue", getMapFirstValue),
+                        Map.entry("loopIndex", loopIndex),
+                        Map.entry("getMapKeyArray", getMapKeyArray),
+                        Map.entry("getMapValueArray", getMapValueArray)
+                )
+        );
+    }
+
+    private Inline dataToStringFunc(String funcBaseName, DataType dataType, CodegenContext ctx) {
+        String funcName = ctx.freshName(funcBaseName);
+        ToStringCode dataToStringCode = castToStringCodeInternal(dataType, ctx);
+        ExprValue data = JavaCode.variable("data", dataType);
+        ExprValue dataStr = JavaCode.variable("dataStr", StringType.INSTANCE);
+        String javaType = CodeGeneratorUtils.javaType(dataType);
+        return new Inline(
+                ctx.addNewFunction(
+                        funcName,
+                        CodeGeneratorUtils.template(
+                                """
+                                        private UTF8String ${funcName}(${javaType} ${data}) {
+                                          UTF8String ${dataStr} = null;
+                                          ${dataToStringCode}
+                                          return ${dataStr};
+                                        }
+                                        """,
+                                Map.ofEntries(
+                                        Map.entry("funcName", funcName),
+                                        Map.entry("javaType", javaType),
+                                        Map.entry("data", data),
+                                        Map.entry("dataStr", dataStr),
+                                        Map.entry("dataToStringCode", dataToStringCode.apply(data, dataStr))
+                                )
+                        )
+                )
+        );
+    }
+
+    private Block writeStructToStringBuilder(
+            DataType[] fieldTypes,
+            ExprValue row,
+            ExprValue buffer,
+            CodegenContext ctx) {
+        List<String> structToStringCode = new ArrayList<>(fieldTypes.length);
+        for (int i = 0; i < fieldTypes.length; i++) {
+            DataType fieldType = fieldTypes[i];
+            ToStringCode fieldToStringCode = castToStringCodeInternal(fieldType, ctx);
+            ExprValue field = ctx.freshVariable("field", fieldType);
+            ExprValue fieldStr = ctx.freshVariable("fieldStr", StringType.INSTANCE);
+            String javaType = CodeGeneratorUtils.javaType(fieldType);
+            String getValue = CodeGeneratorUtils.getValue(row.toString(), fieldType, String.valueOf(i));
+            Block appendComma = (i == 0)
+                    ? EmptyBlock.INSTANCE
+                    : Block.block(
+                            "${buffer}.append(\",\");",
+                            Map.of("buffer", buffer)
+                    );
+            Block appendSpace = (i == 0)
+                    ? EmptyBlock.INSTANCE
+                    : Block.block(
+                            "${buffer}.append(\" \");",
+                            Map.of("buffer", buffer)
+                    );
+            Block code = Block.block(
+                    """
+                            ${appendComma}
+                            if (${row}.isNullAt(${index})) {
+                              ${appendNull}
+                            } else {
+                              ${appendSpace}
+                              ${javaType} ${field} = ${getValue};
+                              UTF8String ${fieldStr} = null;
+                              ${fieldToStringCode}
+                              ${buffer}.append(${fieldStr});
+                            }
+                            """,
+                    Map.ofEntries(
+                            Map.entry("appendComma", appendComma),
+                            Map.entry("row", row),
+                            Map.entry("index", i),
+                            Map.entry("appendNull", appendNull(buffer, i == 0)),
+                            Map.entry("appendSpace", appendSpace),
+                            Map.entry("javaType", javaType),
+                            Map.entry("field", field),
+                            Map.entry("getValue", getValue),
+                            Map.entry("fieldStr", fieldStr),
+                            Map.entry("fieldToStringCode", fieldToStringCode.apply(field, fieldStr)),
+                            Map.entry("buffer", buffer)
+                    )
+            );
+            structToStringCode.add(code.toString());
+        }
+        String writeStructCode = ctx.splitExpressions(
+                structToStringCode,
+                "fieldToString",
+                List.of(
+                        com.jipple.tuple.Tuple2.of("InternalRow", row.toString()),
+                        com.jipple.tuple.Tuple2.of(UTF8StringBuilder.class.getName(), buffer.toString())
+                )
+        );
+        return Block.block(
+                """
+                        ${buffer}.append("${leftBracket}");
+                        ${writeStructCode}
+                        ${buffer}.append("${rightBracket}");
+                        """,
+                Map.ofEntries(
+                        Map.entry("buffer", buffer),
+                        Map.entry("leftBracket", Cast.leftBracket),
+                        Map.entry("rightBracket", Cast.rightBracket),
+                        Map.entry("writeStructCode", writeStructCode)
+                )
+        );
+    }
+
+    private CastFunction castToBinaryCode(DataType from) {
+        return (c, evPrim, evNull) -> {
+            String inputExpr = c.toString();
+            String utf8StringClass = UTF8String.class.getName();
+            String numberConverterClass = NumberConverter.class.getName();
+            if (from instanceof StringType) {
+                return Block.block(
+                        "${value} = ((${utf8String}) ${input}).getBytes();",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("utf8String", utf8StringClass),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (from instanceof IntegerType || from instanceof LongType) {
+                return Block.block(
+                        "${value} = ${numberConverter}.toBinary(${input});",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("numberConverter", numberConverterClass),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            throw new UnsupportedOperationException("Cannot cast " + from + " to binary");
+        };
+    }
+
+    private CastFunction castToBooleanCode(DataType from, CodegenContext ctx) {
+        return (c, evPrim, evNull) -> {
+            String inputExpr = c.toString();
+            String utf8StringClass = UTF8String.class.getName();
+            String stringUtilsClass = StringUtils.class.getName();
+            if (from instanceof StringType) {
+                return Block.block(
+                        """
+                                if (${stringUtils}.isTrueString((${utf8String}) ${input})) {
+                                  ${isNull} = false;
+                                  ${value} = true;
+                                } else if (${stringUtils}.isFalseString((${utf8String}) ${input})) {
+                                  ${isNull} = false;
+                                  ${value} = false;
+                                } else {
+                                  ${isNull} = true;
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("stringUtils", stringUtilsClass),
+                                Map.entry("utf8String", utf8StringClass),
+                                Map.entry("input", inputExpr),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            if (from instanceof BooleanType) {
+                return Block.block(
+                        "${value} = ${input};",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (from instanceof DecimalType) {
+                String decimalClass = Decimal.class.getName();
+                return Block.block(
+                        "${value} = ((${decimalClass}) ${input}) != ${decimalClass}.ZERO;",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("decimalClass", decimalClass),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (isSimpleNumeric(from)) {
+                return Block.block(
+                        "${value} = ${input} != 0;",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            throw new UnsupportedOperationException("Cannot cast " + from + " to boolean");
+        };
+    }
+
+    private CastFunction castToDateCode(DataType from, CodegenContext ctx) {
+        return (c, evPrim, evNull) -> {
+            String inputExpr = c.toString();
+            String dateTimeUtils = JippleDateTimeUtils.class.getName();
+            if (from instanceof StringType) {
+                String dateOpt = ctx.freshName("dateOpt");
+                return Block.block(
+                        """
+                                com.jipple.collection.Option<Integer> ${dateOpt} =
+                                  ${dateTimeUtils}.stringToDate((UTF8String) ${input});
+                                if (${dateOpt}.isDefined()) {
+                                  ${isNull} = false;
+                                  ${value} = ${dateOpt}.get();
+                                } else {
+                                  ${isNull} = true;
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("dateOpt", dateOpt),
+                                Map.entry("dateTimeUtils", dateTimeUtils),
+                                Map.entry("input", inputExpr),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            if (from instanceof TimestampType) {
+                ZoneId zid = zoneId();
+                String zoneRef = ctx.addReferenceObj("zoneId", zid, ZoneId.class.getName());
+                return Block.block(
+                        "${value} = ${dateTimeUtils}.microsToDays((Long) ${input}, ${zoneId});",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("dateTimeUtils", dateTimeUtils),
+                                Map.entry("input", inputExpr),
+                                Map.entry("zoneId", zoneRef)
+                        )
+                );
+            }
+            if (from instanceof TimestampNTZType) {
+                return Block.block(
+                        "${value} = ${dateTimeUtils}.microsToDays((Long) ${input}, java.time.ZoneOffset.UTC);",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("dateTimeUtils", dateTimeUtils),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            throw new UnsupportedOperationException("Cannot cast " + from + " to date");
+        };
+    }
+
+    private CastFunction castToTimestampCode(DataType from, CodegenContext ctx) {
+        return (c, evPrim, evNull) -> {
+            String inputExpr = c.toString();
+            String dateTimeUtils = JippleDateTimeUtils.class.getName();
+            if (from instanceof StringType) {
+                String tsOpt = ctx.freshName("tsOpt");
+                ZoneId zid = zoneId();
+                String zoneRef = ctx.addReferenceObj("zoneId", zid, ZoneId.class.getName());
+                return Block.block(
+                        """
+                                com.jipple.collection.Option<Long> ${tsOpt} =
+                                  ${dateTimeUtils}.stringToTimestamp((UTF8String) ${input}, ${zoneId});
+                                if (${tsOpt}.isDefined()) {
+                                  ${isNull} = false;
+                                  ${value} = ${tsOpt}.get();
+                                } else {
+                                  ${isNull} = true;
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("tsOpt", tsOpt),
+                                Map.entry("dateTimeUtils", dateTimeUtils),
+                                Map.entry("input", inputExpr),
+                                Map.entry("zoneId", zoneRef),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            if (from instanceof DateType) {
+                ZoneId zid = zoneId();
+                String zoneRef = ctx.addReferenceObj("zoneId", zid, ZoneId.class.getName());
+                return Block.block(
+                        "${value} = ${dateTimeUtils}.daysToMicros((Integer) ${input}, ${zoneId});",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("dateTimeUtils", dateTimeUtils),
+                                Map.entry("input", inputExpr),
+                                Map.entry("zoneId", zoneRef)
+                        )
+                );
+            }
+            if (from instanceof TimestampNTZType) {
+                ZoneId zid = zoneId();
+                String zoneRef = ctx.addReferenceObj("zoneId", zid, ZoneId.class.getName());
+                return Block.block(
+                        "${value} = ${dateTimeUtils}.convertTz((Long) ${input}, ${zoneId}, java.time.ZoneOffset.UTC);",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("dateTimeUtils", dateTimeUtils),
+                                Map.entry("input", inputExpr),
+                                Map.entry("zoneId", zoneRef)
+                        )
+                );
+            }
+            throw new UnsupportedOperationException("Cannot cast " + from + " to timestamp");
+        };
+    }
+
+    private CastFunction castToTimestampNTZCode(DataType from, CodegenContext ctx) {
+        return (c, evPrim, evNull) -> {
+            String inputExpr = c.toString();
+            String dateTimeUtils = JippleDateTimeUtils.class.getName();
+            if (from instanceof StringType) {
+                String tsOpt = ctx.freshName("tsNtzOpt");
+                return Block.block(
+                        """
+                                com.jipple.collection.Option<Long> ${tsOpt} =
+                                  ${dateTimeUtils}.stringToTimestamp((UTF8String) ${input}, java.time.ZoneOffset.UTC);
+                                if (${tsOpt}.isDefined()) {
+                                  ${isNull} = false;
+                                  ${value} = ${tsOpt}.get();
+                                } else {
+                                  ${isNull} = true;
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("tsOpt", tsOpt),
+                                Map.entry("dateTimeUtils", dateTimeUtils),
+                                Map.entry("input", inputExpr),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            if (from instanceof DateType) {
+                return Block.block(
+                        "${value} = ${dateTimeUtils}.daysToMicros((Integer) ${input}, java.time.ZoneOffset.UTC);",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("dateTimeUtils", dateTimeUtils),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (from instanceof TimestampType) {
+                ZoneId zid = zoneId();
+                String zoneRef = ctx.addReferenceObj("zoneId", zid, ZoneId.class.getName());
+                return Block.block(
+                        "${value} = ${dateTimeUtils}.convertTz((Long) ${input}, java.time.ZoneOffset.UTC, ${zoneId});",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("dateTimeUtils", dateTimeUtils),
+                                Map.entry("input", inputExpr),
+                                Map.entry("zoneId", zoneRef)
+                        )
+                );
+            }
+            throw new UnsupportedOperationException("Cannot cast " + from + " to timestamp_ntz");
+        };
+    }
+
+    private CastFunction castToIntCode(DataType from, CodegenContext ctx) {
+        return (c, evPrim, evNull) -> {
+            String inputExpr = c.toString();
+            if (from instanceof StringType) {
+                String intWrapper = ctx.freshName("intWrapper");
+                return Block.block(
+                        """
+                                UTF8String.IntWrapper ${intWrapper} = new UTF8String.IntWrapper();
+                                if (!((UTF8String) ${input}).toInt(${intWrapper})) {
+                                  ${isNull} = true;
+                                } else {
+                                  ${isNull} = false;
+                                  ${value} = ${intWrapper}.value;
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("intWrapper", intWrapper),
+                                Map.entry("input", inputExpr),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            if (from instanceof BooleanType) {
+                return Block.block(
+                        "${value} = ${input} ? 1 : 0;",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (from instanceof DateType) {
+                return Block.block(
+                        "${isNull} = true;",
+                        Map.ofEntries(
+                                Map.entry("isNull", evNull)
+                        )
+                );
+            }
+            if (from instanceof TimestampType) {
+                return Block.block(
+                        "${value} = (int) java.lang.Math.floorDiv((Long) ${input}, ${microsPerSecond});",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr),
+                                Map.entry("microsPerSecond", "com.jipple.sql.catalyst.util.DateTimeConstants.MICROS_PER_SECOND")
+                        )
+                );
+            }
+            if (from instanceof DecimalType) {
+                return Block.block(
+                        "${value} = ((${decimalClass}) ${input}).toInt();",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("decimalClass", Decimal.class.getName()),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (isSimpleNumeric(from)) {
+                return Block.block(
+                        "${value} = (int) ${input};",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            throw new UnsupportedOperationException("Cannot cast " + from + " to int");
+        };
+    }
+
+    private CastFunction castToLongCode(DataType from, CodegenContext ctx) {
+        return (c, evPrim, evNull) -> {
+            String inputExpr = c.toString();
+            if (from instanceof StringType) {
+                String longWrapper = ctx.freshName("longWrapper");
+                return Block.block(
+                        """
+                                UTF8String.LongWrapper ${longWrapper} = new UTF8String.LongWrapper();
+                                if (!((UTF8String) ${input}).toLong(${longWrapper})) {
+                                  ${isNull} = true;
+                                } else {
+                                  ${isNull} = false;
+                                  ${value} = ${longWrapper}.value;
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("longWrapper", longWrapper),
+                                Map.entry("input", inputExpr),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            if (from instanceof BooleanType) {
+                return Block.block(
+                        "${value} = ${input} ? 1L : 0L;",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (from instanceof DateType) {
+                return Block.block(
+                        "${isNull} = true;",
+                        Map.ofEntries(
+                                Map.entry("isNull", evNull)
+                        )
+                );
+            }
+            if (from instanceof TimestampType) {
+                return Block.block(
+                        "${value} = java.lang.Math.floorDiv((Long) ${input}, ${microsPerSecond});",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr),
+                                Map.entry("microsPerSecond", "com.jipple.sql.catalyst.util.DateTimeConstants.MICROS_PER_SECOND")
+                        )
+                );
+            }
+            if (from instanceof DecimalType) {
+                return Block.block(
+                        "${value} = ((${decimalClass}) ${input}).toLong();",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("decimalClass", Decimal.class.getName()),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (isSimpleNumeric(from)) {
+                return Block.block(
+                        "${value} = (long) ${input};",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            throw new UnsupportedOperationException("Cannot cast " + from + " to long");
+        };
+    }
+
+    private CastFunction castToFloatCode(DataType from, CodegenContext ctx) {
+        return (c, evPrim, evNull) -> {
+            String inputExpr = c.toString();
+            String castClass = Cast.class.getName();
+            if (from instanceof StringType) {
+                String floatStr = ctx.freshName("floatStr");
+                return Block.block(
+                        """
+                                String ${floatStr} = ((UTF8String) ${input}).toString();
+                                try {
+                                  ${value} = Float.parseFloat(${floatStr});
+                                } catch (NumberFormatException e) {
+                                  Object special = ${castClass}.processFloatingPointSpecialLiterals(${floatStr}, true);
+                                  if (special != null) {
+                                    ${value} = (Float) special;
+                                  } else {
+                                    ${isNull} = true;
+                                  }
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("floatStr", floatStr),
+                                Map.entry("input", inputExpr),
+                                Map.entry("value", evPrim),
+                                Map.entry("castClass", castClass),
+                                Map.entry("isNull", evNull)
+                        )
+                );
+            }
+            if (from instanceof BooleanType) {
+                return Block.block(
+                        "${value} = ${input} ? 1.0f : 0.0f;",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (from instanceof DateType) {
+                return Block.block(
+                        "${isNull} = true;",
+                        Map.ofEntries(
+                                Map.entry("isNull", evNull)
+                        )
+                );
+            }
+            if (from instanceof TimestampType) {
+                return Block.block(
+                        "${value} = (float) (((double) ${input}) / ${microsPerSecond});",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr),
+                                Map.entry("microsPerSecond", "com.jipple.sql.catalyst.util.DateTimeConstants.MICROS_PER_SECOND")
+                        )
+                );
+            }
+            if (from instanceof DecimalType) {
+                return Block.block(
+                        "${value} = ((${decimalClass}) ${input}).toFloat();",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("decimalClass", Decimal.class.getName()),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (isSimpleNumeric(from)) {
+                return Block.block(
+                        "${value} = (float) ${input};",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            throw new UnsupportedOperationException("Cannot cast " + from + " to float");
+        };
+    }
+
+    private CastFunction castToDoubleCode(DataType from, CodegenContext ctx) {
+        return (c, evPrim, evNull) -> {
+            String inputExpr = c.toString();
+            String castClass = Cast.class.getName();
+            if (from instanceof StringType) {
+                String doubleStr = ctx.freshName("doubleStr");
+                return Block.block(
+                        """
+                                String ${doubleStr} = ((UTF8String) ${input}).toString();
+                                try {
+                                  ${value} = Double.parseDouble(${doubleStr});
+                                } catch (NumberFormatException e) {
+                                  Object special = ${castClass}.processFloatingPointSpecialLiterals(${doubleStr}, false);
+                                  if (special != null) {
+                                    ${value} = (Double) special;
+                                  } else {
+                                    ${isNull} = true;
+                                  }
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("doubleStr", doubleStr),
+                                Map.entry("input", inputExpr),
+                                Map.entry("value", evPrim),
+                                Map.entry("castClass", castClass),
+                                Map.entry("isNull", evNull)
+                        )
+                );
+            }
+            if (from instanceof BooleanType) {
+                return Block.block(
+                        "${value} = ${input} ? 1.0 : 0.0;",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (from instanceof DateType) {
+                return Block.block(
+                        "${isNull} = true;",
+                        Map.ofEntries(
+                                Map.entry("isNull", evNull)
+                        )
+                );
+            }
+            if (from instanceof TimestampType) {
+                return Block.block(
+                        "${value} = ((double) ${input}) / ${microsPerSecond};",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr),
+                                Map.entry("microsPerSecond", "com.jipple.sql.catalyst.util.DateTimeConstants.MICROS_PER_SECOND")
+                        )
+                );
+            }
+            if (from instanceof DecimalType) {
+                return Block.block(
+                        "${value} = ((${decimalClass}) ${input}).toDouble();",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("decimalClass", Decimal.class.getName()),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            if (isSimpleNumeric(from)) {
+                return Block.block(
+                        "${value} = (double) ${input};",
+                        Map.ofEntries(
+                                Map.entry("value", evPrim),
+                                Map.entry("input", inputExpr)
+                        )
+                );
+            }
+            throw new UnsupportedOperationException("Cannot cast " + from + " to double");
+        };
+    }
+
+    private CastFunction castToDecimalCode(DataType from, DecimalType target, CodegenContext ctx) {
+        return (c, evPrim, evNull) -> {
+            String inputExpr = c.toString();
+            String decimalClass = Decimal.class.getName();
+            String precision = String.valueOf(target.precision);
+            String scale = String.valueOf(target.scale);
+            if (from instanceof StringType) {
+                String tmp = ctx.freshName("tmpDecimal");
+                String casted = ctx.freshName("castedDecimal");
+                return Block.block(
+                        """
+                                ${decimalClass} ${tmp} = ${decimalClass}.fromString((UTF8String) ${input});
+                                if (${tmp} == null) {
+                                  ${isNull} = true;
+                                } else {
+                                  ${decimalClass} ${casted} =
+                                    ${tmp}.toPrecision(${precision}, ${scale}, java.math.RoundingMode.HALF_UP, true);
+                                  if (${casted} == null) {
+                                    ${isNull} = true;
+                                  } else {
+                                    ${isNull} = false;
+                                    ${value} = ${casted};
+                                  }
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("decimalClass", decimalClass),
+                                Map.entry("tmp", tmp),
+                                Map.entry("casted", casted),
+                                Map.entry("input", inputExpr),
+                                Map.entry("precision", precision),
+                                Map.entry("scale", scale),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            if (from instanceof BooleanType) {
+                String casted = ctx.freshName("castedDecimal");
+                return Block.block(
+                        """
+                                ${decimalClass} ${casted} =
+                                  (${input} ? ${decimalClass}.ONE : ${decimalClass}.ZERO)
+                                    .toPrecision(${precision}, ${scale}, java.math.RoundingMode.HALF_UP, true);
+                                if (${casted} == null) {
+                                  ${isNull} = true;
+                                } else {
+                                  ${isNull} = false;
+                                  ${value} = ${casted};
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("decimalClass", decimalClass),
+                                Map.entry("casted", casted),
+                                Map.entry("input", inputExpr),
+                                Map.entry("precision", precision),
+                                Map.entry("scale", scale),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            if (from instanceof DecimalType) {
+                String casted = ctx.freshName("castedDecimal");
+                return Block.block(
+                        """
+                                ${decimalClass} ${casted} =
+                                  ((${decimalClass}) ${input})
+                                    .toPrecision(${precision}, ${scale}, java.math.RoundingMode.HALF_UP, true);
+                                if (${casted} == null) {
+                                  ${isNull} = true;
+                                } else {
+                                  ${isNull} = false;
+                                  ${value} = ${casted};
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("decimalClass", decimalClass),
+                                Map.entry("casted", casted),
+                                Map.entry("input", inputExpr),
+                                Map.entry("precision", precision),
+                                Map.entry("scale", scale),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            if (from instanceof IntegerType || from instanceof LongType) {
+                String tmp = ctx.freshName("tmpDecimal");
+                String casted = ctx.freshName("castedDecimal");
+                return Block.block(
+                        """
+                                ${decimalClass} ${tmp} = new ${decimalClass}(${input});
+                                ${decimalClass} ${casted} =
+                                  ${tmp}.toPrecision(${precision}, ${scale}, java.math.RoundingMode.HALF_UP, true);
+                                if (${casted} == null) {
+                                  ${isNull} = true;
+                                } else {
+                                  ${isNull} = false;
+                                  ${value} = ${casted};
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("decimalClass", decimalClass),
+                                Map.entry("tmp", tmp),
+                                Map.entry("casted", casted),
+                                Map.entry("input", inputExpr),
+                                Map.entry("precision", precision),
+                                Map.entry("scale", scale),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            if (from instanceof FloatType) {
+                String tmp = ctx.freshName("tmpDecimal");
+                String casted = ctx.freshName("castedDecimal");
+                return Block.block(
+                        """
+                                if (Float.isNaN(${input}) || Float.isInfinite(${input})) {
+                                  ${isNull} = true;
+                                } else {
+                                  ${decimalClass} ${tmp} = new ${decimalClass}((float) ${input});
+                                  ${decimalClass} ${casted} =
+                                    ${tmp}.toPrecision(${precision}, ${scale}, java.math.RoundingMode.HALF_UP, true);
+                                  if (${casted} == null) {
+                                    ${isNull} = true;
+                                  } else {
+                                    ${isNull} = false;
+                                    ${value} = ${casted};
+                                  }
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("decimalClass", decimalClass),
+                                Map.entry("tmp", tmp),
+                                Map.entry("casted", casted),
+                                Map.entry("input", inputExpr),
+                                Map.entry("precision", precision),
+                                Map.entry("scale", scale),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            if (from instanceof DoubleType) {
+                String tmp = ctx.freshName("tmpDecimal");
+                String casted = ctx.freshName("castedDecimal");
+                return Block.block(
+                        """
+                                if (Double.isNaN(${input}) || Double.isInfinite(${input})) {
+                                  ${isNull} = true;
+                                } else {
+                                  ${decimalClass} ${tmp} = new ${decimalClass}((double) ${input});
+                                  ${decimalClass} ${casted} =
+                                    ${tmp}.toPrecision(${precision}, ${scale}, java.math.RoundingMode.HALF_UP, true);
+                                  if (${casted} == null) {
+                                    ${isNull} = true;
+                                  } else {
+                                    ${isNull} = false;
+                                    ${value} = ${casted};
+                                  }
+                                }
+                                """,
+                        Map.ofEntries(
+                                Map.entry("decimalClass", decimalClass),
+                                Map.entry("tmp", tmp),
+                                Map.entry("casted", casted),
+                                Map.entry("input", inputExpr),
+                                Map.entry("precision", precision),
+                                Map.entry("scale", scale),
+                                Map.entry("isNull", evNull),
+                                Map.entry("value", evPrim)
+                        )
+                );
+            }
+            throw new UnsupportedOperationException("Cannot cast " + from + " to decimal");
+        };
+    }
+
+    private CastFunction castArrayCode(
+            DataType fromType,
+            DataType toType,
+            CodegenContext ctx) {
+        CastFunction elementCast = nullSafeCastFunction(fromType, toType, ctx);
+        String arrayClass = GenericArrayData.class.getName();
+        ExprValue fromElementNull = ctx.freshVariable("feNull", BooleanType.INSTANCE);
+        ExprValue fromElementPrim = ctx.freshVariable("fePrim", fromType);
+        ExprValue toElementNull = ctx.freshVariable("teNull", BooleanType.INSTANCE);
+        ExprValue toElementPrim = ctx.freshVariable("tePrim", toType);
+        ExprValue size = ctx.freshVariable("n", IntegerType.INSTANCE);
+        ExprValue j = ctx.freshVariable("j", IntegerType.INSTANCE);
+        ExprValue values = ctx.freshVariable("values", Object[].class);
+        String javaType = CodeGeneratorUtils.javaType(fromType);
+
+        return (c, evPrim, evNull) -> {
+            String fromElementValue = CodeGeneratorUtils.getValue(c.toString(), fromType, j.toString());
+            Block castBlock = castCode(ctx, fromElementPrim, fromElementNull, toElementPrim, toElementNull, toType, elementCast);
+            return Block.block(
+                    """
+                            final int ${size} = ${input}.numElements();
+                            final Object[] ${values} = new Object[${size}];
+                            for (int ${j} = 0; ${j} < ${size}; ${j}++) {
+                              if (${input}.isNullAt(${j})) {
+                                ${values}[${j}] = null;
+                              } else {
+                                boolean ${fromElementNull} = false;
+                                ${javaType} ${fromElementPrim} = ${fromElementValue};
+                                ${castBlock}
+                                if (${toElementNull}) {
+                                  ${values}[${j}] = null;
+                                } else {
+                                  ${values}[${j}] = ${toElementPrim};
+                                }
+                              }
+                            }
+                            ${evPrim} = new ${arrayClass}(${values});
+                            """,
+                    Map.ofEntries(
+                            Map.entry("size", size),
+                            Map.entry("input", c),
+                            Map.entry("values", values),
+                            Map.entry("j", j),
+                            Map.entry("fromElementNull", fromElementNull),
+                            Map.entry("javaType", javaType),
+                            Map.entry("fromElementPrim", fromElementPrim),
+                            Map.entry("fromElementValue", fromElementValue),
+                            Map.entry("castBlock", castBlock),
+                            Map.entry("toElementNull", toElementNull),
+                            Map.entry("toElementPrim", toElementPrim),
+                            Map.entry("evPrim", evPrim),
+                            Map.entry("arrayClass", arrayClass)
+                    )
+            );
+        };
+    }
+
+    private CastFunction castMapCode(MapType from, MapType to, CodegenContext ctx) {
+        CastFunction keysCast = castArrayCode(from.keyType, to.keyType, ctx);
+        CastFunction valuesCast = castArrayCode(from.valueType, to.valueType, ctx);
+
+        String mapClass = ArrayBasedMapData.class.getName();
+        ExprValue keys = ctx.freshVariable("keys", new ArrayType(from.keyType));
+        ExprValue convertedKeys = ctx.freshVariable("convertedKeys", new ArrayType(to.keyType));
+        ExprValue convertedKeysNull = ctx.freshVariable("convertedKeysNull", BooleanType.INSTANCE);
+        ExprValue values = ctx.freshVariable("values", new ArrayType(from.valueType));
+        ExprValue convertedValues = ctx.freshVariable("convertedValues", new ArrayType(to.valueType));
+        ExprValue convertedValuesNull = ctx.freshVariable("convertedValuesNull", BooleanType.INSTANCE);
+
+        Block keysCastBlock = castCode(
+                ctx,
+                keys,
+                FalseLiteral.INSTANCE,
+                convertedKeys,
+                convertedKeysNull,
+                new ArrayType(to.keyType),
+                keysCast);
+        Block valuesCastBlock = castCode(
+                ctx,
+                values,
+                FalseLiteral.INSTANCE,
+                convertedValues,
+                convertedValuesNull,
+                new ArrayType(to.valueType),
+                valuesCast);
+
+        return (c, evPrim, evNull) -> Block.block(
+                """
+                        final ArrayData ${keys} = ${input}.keyArray();
+                        final ArrayData ${values} = ${input}.valueArray();
+                        ${keysCastBlock}
+                        ${valuesCastBlock}
+                        ${evPrim} = new ${mapClass}(${convertedKeys}, ${convertedValues});
+                        """,
+                Map.ofEntries(
+                        Map.entry("keys", keys),
+                        Map.entry("values", values),
+                        Map.entry("input", c),
+                        Map.entry("keysCastBlock", keysCastBlock),
+                        Map.entry("valuesCastBlock", valuesCastBlock),
+                        Map.entry("evPrim", evPrim),
+                        Map.entry("mapClass", mapClass),
+                        Map.entry("convertedKeys", convertedKeys),
+                        Map.entry("convertedValues", convertedValues)
+                )
+        );
+    }
+
+    private CastFunction castStructCode(
+            StructType from,
+            StructType to,
+            CodegenContext ctx) {
+        int fieldCount = from.fields.length;
+        CastFunction[] fieldCasts = new CastFunction[fieldCount];
+        for (int idx = 0; idx < fieldCount; idx++) {
+            fieldCasts[idx] = nullSafeCastFunction(from.fields[idx].dataType, to.fields[idx].dataType, ctx);
+        }
+
+        ExprValue tmpResult = ctx.freshVariable("tmpResult", GenericInternalRow.class);
+        ExprValue tmpInput = ctx.freshVariable("tmpInput", InternalRow.class);
+        String rowClass = GenericInternalRow.class.getName();
+
+        List<Block> fieldBlocks = new ArrayList<>();
+        for (int i = 0; i < fieldCount; i++) {
+            DataType fromType = from.fields[i].dataType;
+            DataType toType = to.fields[i].dataType;
+            ExprValue fromFieldPrim = ctx.freshVariable("ffp", fromType);
+            ExprValue fromFieldNull = ctx.freshVariable("ffn", BooleanType.INSTANCE);
+            ExprValue toFieldPrim = ctx.freshVariable("tfp", toType);
+            ExprValue toFieldNull = ctx.freshVariable("tfn", BooleanType.INSTANCE);
+            String javaType = CodeGeneratorUtils.javaType(fromType);
+            String getValue = CodeGeneratorUtils.getValue(tmpInput.toString(), fromType, String.valueOf(i));
+            String setColumn = CodeGeneratorUtils.setColumn(tmpResult.toString(), toType, i, toFieldPrim.toString()) + ";";
+            Block castBlock = castCode(ctx, fromFieldPrim, fromFieldNull, toFieldPrim, toFieldNull, toType, fieldCasts[i]);
+
+            fieldBlocks.add(Block.block(
+                    """
+                            boolean ${fromFieldNull} = ${tmpInput}.isNullAt(${index});
+                            if (${fromFieldNull}) {
+                              ${tmpResult}.setNullAt(${index});
+                            } else {
+                              ${javaType} ${fromFieldPrim} = ${getValue};
+                              ${castBlock}
+                              if (${toFieldNull}) {
+                                ${tmpResult}.setNullAt(${index});
+                              } else {
+                                ${setColumn}
+                              }
+                            }
+                            """,
+                    Map.ofEntries(
+                            Map.entry("fromFieldNull", fromFieldNull),
+                            Map.entry("tmpInput", tmpInput),
+                            Map.entry("index", i),
+                            Map.entry("tmpResult", tmpResult),
+                            Map.entry("javaType", javaType),
+                            Map.entry("fromFieldPrim", fromFieldPrim),
+                            Map.entry("getValue", getValue),
+                            Map.entry("castBlock", castBlock),
+                            Map.entry("toFieldNull", toFieldNull),
+                            Map.entry("setColumn", setColumn)
+                    )
+            ));
+        }
+
+        List<String> fieldsEvalCode = new ArrayList<>(fieldBlocks.size());
+        for (Block block : fieldBlocks) {
+            fieldsEvalCode.add(block.toString());
+        }
+        String fieldsEvalCodes = ctx.splitExpressions(
+                fieldsEvalCode,
+                "castStruct",
+                List.of(
+                        com.jipple.tuple.Tuple2.of("InternalRow", tmpInput.toString()),
+                        com.jipple.tuple.Tuple2.of(rowClass, tmpResult.toString())
+                )
+        );
+
+        return (c, evPrim, evNull) -> Block.block(
+                """
+                        final ${rowClass} ${tmpResult} = new ${rowClass}(${fieldCount});
+                        final InternalRow ${tmpInput} = (InternalRow) ${input};
+                        ${fieldsEvalCode}
+                        ${evPrim} = ${tmpResult};
+                        """,
+                Map.ofEntries(
+                        Map.entry("rowClass", rowClass),
+                        Map.entry("tmpResult", tmpResult),
+                        Map.entry("fieldCount", fieldCount),
+                        Map.entry("tmpInput", tmpInput),
+                        Map.entry("input", c),
+                        Map.entry("fieldsEvalCode", fieldsEvalCodes),
+                        Map.entry("evPrim", evPrim)
+                )
+        );
+    }
+
+    private static boolean isSimpleNumeric(DataType dataType) {
+        return dataType instanceof IntegerType
+                || dataType instanceof LongType
+                || dataType instanceof FloatType
+                || dataType instanceof DoubleType;
     }
 
     @Override

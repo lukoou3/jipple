@@ -117,8 +117,8 @@ public class Literal extends LeafExpression {
         return false;
     }
 
-    static final Literal TrueLiteral = new Literal(true, BOOLEAN);
-    static final Literal FalseLiteral = new Literal(false, BOOLEAN);
+    public static final Literal TrueLiteral = new Literal(true, BOOLEAN);
+    public static final Literal FalseLiteral = new Literal(false, BOOLEAN);
 
     public static Literal of(Object v) {
         if (v == null) {

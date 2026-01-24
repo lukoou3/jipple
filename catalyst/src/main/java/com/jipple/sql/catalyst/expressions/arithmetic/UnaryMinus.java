@@ -3,6 +3,9 @@ package com.jipple.sql.catalyst.expressions.arithmetic;
 import com.jipple.collection.Option;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.expressions.UnaryExpression;
+import com.jipple.sql.catalyst.expressions.codegen.CodeGeneratorUtils;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
 import com.jipple.sql.types.*;
 
 import java.util.List;
@@ -41,6 +44,32 @@ public class UnaryMinus extends UnaryExpression {
             }
         }
         return negate.apply(input);
+    }
+
+    @Override
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        DataType dt = dataType();
+        if (dt instanceof DecimalType) {
+            return defineCodeGen(ctx, ev, c -> c + ".unaryMinus()");
+        } else if (dt instanceof NumericType) {
+            return nullSafeCodeGen(ctx, ev, eval -> {
+                String originValue = ctx.freshName("origin");
+                String javaType = CodeGeneratorUtils.javaType(dt);
+                return CodeGeneratorUtils.template(
+                        """
+                                ${javaType} ${originValue} = (${javaType})(${eval});
+                                ${value} = (${javaType})(-(${originValue}));
+                                """,
+                        java.util.Map.of(
+                                "javaType", javaType,
+                                "originValue", originValue,
+                                "eval", eval,
+                                "value", ev.value
+                        )
+                );
+            });
+        }
+        throw new UnsupportedOperationException("Unsupported data type: " + dt);
     }
 
     @Override

@@ -69,11 +69,11 @@ public class BoundReference extends LeafExpression {
                                 ${javaType} ${value} = ${isNull} ? ${defaultValue} : (${getValue});
                                 """,
                         Map.of(
-                                "isNull", ev.isNull.toString(),
+                                "isNull", ev.isNull,
                                 "inputRow", ctx.INPUT_ROW,
                                 "ordinal", ordinal,
                                 "javaType", javaType,
-                                "value", ev.value.toString(),
+                                "value", ev.value,
                                 "defaultValue", CodeGeneratorUtils.defaultValue(dataType()),
                                 "getValue", value
                         )
@@ -84,7 +84,7 @@ public class BoundReference extends LeafExpression {
                                 "${javaType} ${value} = ${getValue};",
                                 Map.of(
                                         "javaType", javaType,
-                                        "value", ev.value.toString(),
+                                        "value", ev.value,
                                         "getValue", value
                                 )
                         ),

@@ -2,6 +2,9 @@ package com.jipple.sql.catalyst.analysis.unresolved;
 
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.expressions.Expression;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
+import com.jipple.sql.errors.QueryExecutionErrors;
 import com.jipple.sql.types.DataType;
 
 import java.util.List;
@@ -52,8 +55,13 @@ public class UnresolvedFunction extends Expression {
     }
 
     @Override
-    public Object eval(InternalRow input) {
-        throw new UnresolvedException("eval");
+    public final Object eval(InternalRow input) {
+        throw QueryExecutionErrors.cannotEvaluateExpressionError(this);
+    }
+
+    @Override
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        throw QueryExecutionErrors.cannotGenerateCodeForExpressionError(this);
     }
 
     @Override

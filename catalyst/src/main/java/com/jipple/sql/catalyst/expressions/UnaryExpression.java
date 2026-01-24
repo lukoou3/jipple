@@ -1,9 +1,15 @@
 package com.jipple.sql.catalyst.expressions;
 
 import com.jipple.sql.catalyst.InternalRow;
+import com.jipple.sql.catalyst.expressions.codegen.Block;
+import com.jipple.sql.catalyst.expressions.codegen.CodeGeneratorUtils;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
+import com.jipple.sql.catalyst.expressions.codegen.FalseLiteral;
 import com.jipple.sql.catalyst.trees.UnaryLike;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -63,6 +69,75 @@ public abstract class UnaryExpression extends Expression implements UnaryLike<Ex
      */
     protected Object nullSafeEval(Object input) {
         throw new UnsupportedOperationException("not implements nullSafeEval for: " + this.getClass());
+    }
+
+    /**
+     * Called by unary expressions to generate a code block that returns null if its parent returns
+     * null, and if not null, use {@code f} to generate the expression.
+     *
+     * @param f function that accepts a variable name and returns Java code to compute the output.
+     */
+    protected ExprCode defineCodeGen(
+            CodegenContext ctx,
+            ExprCode ev,
+            Function<String, String> f) {
+        return nullSafeCodeGen(ctx, ev, eval -> ev.value + " = " + f.apply(eval) + ";");
+    }
+
+    /**
+     * Called by unary expressions to generate a code block that returns null if its parent returns
+     * null, and if not null, use {@code f} to generate the expression.
+     *
+     * @param f function that accepts the non-null evaluation result name of child and returns Java
+     *          code to compute the output.
+     */
+    protected ExprCode nullSafeCodeGen(
+            CodegenContext ctx,
+            ExprCode ev,
+            Function<String, String> f) {
+        ExprCode childGen = child.genCode(ctx);
+        String resultCode = f.apply(childGen.value.toString());
+
+        if (nullable()) {
+            String nullSafeEval = ctx.nullSafeExec(
+                    child.nullable(),
+                    childGen.isNull.toString(),
+                    resultCode);
+            return ev.copy(Block.block(
+                    """
+                            ${childCode}
+                            boolean ${isNull} = ${childIsNull};
+                            ${javaType} ${value} = ${defaultValue};
+                            ${nullSafeEval}
+                            """,
+                    Map.of(
+                            "childCode", childGen.code,
+                            "isNull", ev.isNull,
+                            "childIsNull", childGen.isNull,
+                            "javaType", CodeGeneratorUtils.javaType(dataType()),
+                            "value", ev.value,
+                            "defaultValue", CodeGeneratorUtils.defaultValue(dataType()),
+                            "nullSafeEval", nullSafeEval
+                    )
+            ));
+        } else {
+            return ev.copy(Block.block(
+                            """
+                                    ${childCode}
+                                    ${javaType} ${value} = ${defaultValue};
+                                    ${resultCode}
+                                    """,
+                            Map.of(
+                                    "childCode", childGen.code,
+                                    "javaType", CodeGeneratorUtils.javaType(dataType()),
+                                    "value", ev.value,
+                                    "defaultValue", CodeGeneratorUtils.defaultValue(dataType()),
+                                    "resultCode", resultCode
+                            )
+                    ),
+                    FalseLiteral.INSTANCE,
+                    ev.value);
+        }
     }
 
     @Override

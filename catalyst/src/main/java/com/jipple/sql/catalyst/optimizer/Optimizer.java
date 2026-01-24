@@ -18,6 +18,9 @@ public class Optimizer extends RuleExecutor<LogicalPlan> {
 
     private List<Batch> defaultBatches() {
         return List.of(
+                new Batch("Operator Optimization", fixedPoint(),
+                        new OptimizeIn()
+                ),
                 new Batch("Finish Analysis", Once,
                     new EliminateSubqueryAliases(),
                     new ReplaceExpressions()

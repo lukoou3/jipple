@@ -5,9 +5,14 @@ import com.jipple.sql.catalyst.analysis.TypeCheckResult;
 import com.jipple.sql.catalyst.analysis.rule.typecoerce.TypeCoercion;
 import com.jipple.sql.catalyst.expressions.ComplexTypeMergingExpression;
 import com.jipple.sql.catalyst.expressions.Expression;
+import com.jipple.sql.catalyst.expressions.codegen.Block;
+import com.jipple.sql.catalyst.expressions.codegen.CodeGeneratorUtils;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
 import com.jipple.sql.types.DataType;
 
 import java.util.List;
+import java.util.Map;
 
 import static com.jipple.sql.types.DataTypes.BOOLEAN;
 
@@ -60,6 +65,47 @@ public class If extends ComplexTypeMergingExpression {
         } else {
             return falseValue.eval(input);
         }
+    }
+
+    @Override
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        ExprCode condEval = predicate.genCode(ctx);
+        ExprCode trueEval = trueValue.genCode(ctx);
+        ExprCode falseEval = falseValue.genCode(ctx);
+
+        Block code = Block.block(
+                """
+                        ${condCode}
+                        boolean ${isNull} = false;
+                        ${javaType} ${value} = ${defaultValue};
+                        if (!${condIsNull} && ${condValue}) {
+                          ${trueCode}
+                          ${isNull} = ${trueIsNull};
+                          ${value} = ${trueValue};
+                        } else {
+                          ${falseCode}
+                          ${isNull} = ${falseIsNull};
+                          ${value} = ${falseValue};
+                        }
+                        """,
+                Map.ofEntries(
+                        Map.entry("condCode", condEval.code),
+                        Map.entry("isNull", ev.isNull),
+                        Map.entry("javaType", CodeGeneratorUtils.javaType(dataType())),
+                        Map.entry("value", ev.value),
+                        Map.entry("defaultValue", CodeGeneratorUtils.defaultValue(dataType())),
+                        Map.entry("condIsNull", condEval.isNull),
+                        Map.entry("condValue", condEval.value),
+                        Map.entry("trueCode", trueEval.code),
+                        Map.entry("trueIsNull", trueEval.isNull),
+                        Map.entry("trueValue", trueEval.value),
+                        Map.entry("falseCode", falseEval.code),
+                        Map.entry("falseIsNull", falseEval.isNull),
+                        Map.entry("falseValue", falseEval.value)
+                )
+        );
+
+        return ev.copy(code);
     }
 
     @Override

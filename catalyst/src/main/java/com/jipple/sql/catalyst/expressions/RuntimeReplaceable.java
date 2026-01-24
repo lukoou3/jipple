@@ -1,6 +1,8 @@
 package com.jipple.sql.catalyst.expressions;
 
 import com.jipple.sql.catalyst.InternalRow;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
 import com.jipple.sql.errors.QueryExecutionErrors;
 import com.jipple.sql.types.DataType;
 
@@ -22,4 +24,8 @@ public abstract class RuntimeReplaceable extends Expression {
         throw QueryExecutionErrors.cannotEvaluateExpressionError(this);
     }
 
+    @Override
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        throw QueryExecutionErrors.cannotGenerateCodeForExpressionError(this);
+    }
 }

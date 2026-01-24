@@ -1,6 +1,8 @@
 package com.jipple.sql.catalyst.expressions.predicate;
 
 import com.jipple.sql.catalyst.expressions.Expression;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
 
 public class EqualTo extends BinaryComparison {
     public EqualTo(Expression left, Expression right) {
@@ -15,6 +17,11 @@ public class EqualTo extends BinaryComparison {
     @Override
     protected Object nullSafeEval(Object input1, Object input2) {
         return comparator().compare(input1, input2) == 0;
+    }
+
+    @Override
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        return defineCodeGen(ctx, ev, (c1, c2) -> ctx.genEqual(left.dataType(), c1, c2));
     }
 
     @Override

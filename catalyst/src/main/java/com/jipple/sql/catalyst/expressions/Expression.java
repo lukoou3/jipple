@@ -207,7 +207,7 @@ public abstract class Expression extends TreeNode<Expression> {
     protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
         // Default implementation: return a simple ExprCode
         // Subclasses should override this method to provide actual code generation
-        throw new UnsupportedOperationException("This method must be overridden by all concrete expressions");
+        throw new UnsupportedOperationException("This method must be overridden by all concrete expression:" + getClass());
     }
 
     public boolean resolved() {
@@ -219,6 +219,44 @@ public abstract class Expression extends TreeNode<Expression> {
 
     public boolean childrenResolved() {
         return children().stream().allMatch(Expression::resolved);
+    }
+
+    /**
+     * Returns an expression where a best effort attempt has been made to transform {@code this}
+     * in a way that preserves the result but removes cosmetic variations (case sensitivity,
+     * ordering for commutative operations, etc.).
+     *
+     * {@code deterministic} expressions where {@code this.canonicalized == other.canonicalized}
+     * will always evaluate to the same result.
+     *
+     * The process of canonicalization is a one pass, bottom-up expression tree computation based on
+     * canonicalizing children before canonicalizing the current node. There is one exception though,
+     * as adjacent, same class {@code CommutativeExpression}s canonicalization happens in a way that
+     * calling {@code canonicalized} on the root:
+     *   1. Gathers and canonicalizes the non-commutative (or commutative but not same class) child
+     *      expressions of the adjacent expressions.
+     *   2. Reorder the canonicalized child expressions by their hashcode.
+     * This means that the lazy {@code canonicalized} is called and computed only on the root of the
+     * adjacent expressions.
+     */
+    private Expression _canonicalized;
+
+    public Expression canonicalized() {
+        if (_canonicalized == null) {
+            _canonicalized = withCanonicalizedChildren();
+        }
+        return _canonicalized;
+    }
+
+    /**
+     * The default process of canonicalization. It is a one pass, bottom-up expression tree
+     * computation based on canonicalizing children before canonicalizing the current node.
+     */
+    protected final Expression withCanonicalizedChildren() {
+        List<Expression> canonicalizedChildren = children().stream()
+                .map(Expression::canonicalized)
+                .toList();
+        return withNewChildren(canonicalizedChildren);
     }
 
   /**

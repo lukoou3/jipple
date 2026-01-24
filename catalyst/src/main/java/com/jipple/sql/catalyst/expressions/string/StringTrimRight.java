@@ -41,6 +41,11 @@ public class StringTrimRight extends String2TrimExpression {
     }
 
     @Override
+    protected String trimMethod() {
+        return "trimRight";
+    }
+
+    @Override
     protected Expression withNewChildrenInternal(List<Expression> newChildren) {
         return new StringTrimRight(newChildren.get(0), trimStr.isDefined() ? Option.option(newChildren.get(1)) : Option.none());
     }

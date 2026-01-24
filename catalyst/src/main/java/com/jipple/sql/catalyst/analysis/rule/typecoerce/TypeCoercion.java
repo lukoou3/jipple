@@ -352,5 +352,20 @@ public final class TypeCoercion {
         }
     }
 
+    public static Option<DataType> findCommonTypeDifferentOnlyInNullFlags(List<DataType> types) {
+        if (types.isEmpty()) {
+            return Option.none();
+        }
+        Option<DataType> acc = Option.some(types.get(0));
+        for (int i = 1; i < types.size(); i++) {
+            if (acc.isDefined()) {
+                acc = findCommonTypeDifferentOnlyInNullFlags(acc.get(), types.get(i));
+            } else {
+                return Option.none();
+            }
+        }
+        return acc;
+    }
+
 
 }

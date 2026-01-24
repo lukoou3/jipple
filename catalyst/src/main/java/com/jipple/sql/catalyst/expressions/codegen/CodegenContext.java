@@ -27,7 +27,7 @@ public class CodegenContext {
     /**
      * Holding a list of objects that could be used passed into generated class.
      */
-    private final List<Object> references = new ArrayList<>();
+    public final List<Object> references = new ArrayList<>();
 
     /**
      * Holding the variable name of the input row of the current operator, will be used by

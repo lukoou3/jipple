@@ -41,6 +41,11 @@ public class StringTrimLeft extends String2TrimExpression {
     }
 
     @Override
+    protected String trimMethod() {
+        return "trimLeft";
+    }
+
+    @Override
     protected Expression withNewChildrenInternal(List<Expression> newChildren) {
         return new StringTrimLeft(newChildren.get(0), trimStr.isDefined() ? Option.option(newChildren.get(1)) : Option.none());
     }

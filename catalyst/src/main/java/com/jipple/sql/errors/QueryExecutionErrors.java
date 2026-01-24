@@ -6,6 +6,7 @@ import com.jipple.error.JippleRuntimeException;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.trees.TreeNode;
 import com.jipple.sql.types.DataType;
+import com.jipple.unsafe.array.ByteArrayMethods;
 
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -49,6 +50,15 @@ public class QueryExecutionErrors {
         return new JippleIllegalArgumentException(
                 "TOO_MANY_ARRAY_ELEMENTS",
                 Map.of("numElements", String.valueOf(numElements), "size",  String.valueOf(elementSize))
+        );
+    }
+
+    public static JippleIllegalArgumentException concatArraysWithElementsExceedLimitError(long numElements) {
+        return new JippleIllegalArgumentException(
+                "_LEGACY_ERROR_TEMP_2159",
+                Map.of(
+                    "numberOfElements", String.valueOf(numElements),
+                "maxRoundedArrayLength", String.valueOf(ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH))
         );
     }
 

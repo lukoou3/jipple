@@ -3,6 +3,8 @@ package com.jipple.sql.catalyst.expressions.named;
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.expressions.UnaryExpression;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
 import com.jipple.sql.types.DataType;
 
 import java.util.Collections;
@@ -48,6 +50,19 @@ public class Alias extends UnaryExpression implements NamedExpression {
     @Override
     public Object eval(InternalRow input) {
         return child.eval(input);
+    }
+
+    /**
+     * Just a simple passthrough for code generation.
+     */
+    @Override
+    public ExprCode genCode(CodegenContext ctx) {
+        return child.genCode(ctx);
+    }
+
+    @Override
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        throw new IllegalStateException("Alias.doGenCode should not be called.");
     }
 
     @Override

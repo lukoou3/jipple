@@ -1,9 +1,10 @@
 package com.jipple.sql.catalyst.expressions.predicate;
 
 import com.jipple.collection.Option;
-import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.expressions.UnaryExpression;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
 import com.jipple.sql.types.AbstractDataType;
 import com.jipple.sql.types.DataType;
 
@@ -29,6 +30,11 @@ public class Not extends UnaryExpression {
     @Override
     protected Object nullSafeEval(Object input) {
         return !(Boolean)input;
+    }
+
+    @Override
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        return defineCodeGen(ctx, ev, c -> "!(" + c + ")");
     }
 
     @Override

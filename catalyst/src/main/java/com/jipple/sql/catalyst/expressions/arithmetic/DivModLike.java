@@ -136,14 +136,14 @@ public abstract class DivModLike extends BinaryArithmetic  {
                             }
                             """,
                     Map.ofEntries(
-                            Map.entry("rightCode", eval2.code.toString()),
-                            Map.entry("isNull", ev.isNull.toString()),
+                            Map.entry("rightCode", eval2.code),
+                            Map.entry("isNull", ev.isNull),
                             Map.entry("javaType", javaType),
-                            Map.entry("value", ev.value.toString()),
+                            Map.entry("value", ev.value),
                             Map.entry("defaultValue", CodeGeneratorUtils.defaultValue(dataType())),
                             Map.entry("isZero", isZero),
                             Map.entry("divByZero", divByZero),
-                            Map.entry("leftCode", eval1.code.toString()),
+                            Map.entry("leftCode", eval1.code),
                             Map.entry("checkOverflow", checkIntegralDivideOverflow),
                             Map.entry("operation", operation)
                     )
@@ -172,15 +172,15 @@ public abstract class DivModLike extends BinaryArithmetic  {
                             }
                             """,
                     Map.ofEntries(
-                            Map.entry("rightCode", eval2.code.toString()),
-                            Map.entry("isNull", ev.isNull.toString()),
+                            Map.entry("rightCode", eval2.code),
+                            Map.entry("isNull", ev.isNull),
                             Map.entry("javaType", javaType),
-                            Map.entry("value", ev.value.toString()),
+                            Map.entry("value", ev.value),
                             Map.entry("defaultValue", CodeGeneratorUtils.defaultValue(dataType())),
-                            Map.entry("rightIsNull", eval2.isNull.toString()),
+                            Map.entry("rightIsNull", eval2.isNull),
                             Map.entry("nullOnErrorCondition", nullOnErrorCondition),
-                            Map.entry("leftCode", eval1.code.toString()),
-                            Map.entry("leftIsNull", eval1.isNull.toString()),
+                            Map.entry("leftCode", eval1.code),
+                            Map.entry("leftIsNull", eval1.isNull),
                             Map.entry("failOnErrorBranch", failOnErrorBranch),
                             Map.entry("checkOverflow", checkIntegralDivideOverflow),
                             Map.entry("operation", operation)
