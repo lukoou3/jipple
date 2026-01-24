@@ -154,6 +154,13 @@ public class CodegenContext {
     }
 
     /**
+     * Returns the reference objects as an array for generated classes.
+     */
+    public Object[] referencesArray() {
+        return references.toArray();
+    }
+
+    /**
      * Add an object to `references`.
      *
      * Returns the code to access it.
@@ -732,15 +739,23 @@ public class CodegenContext {
      * @param execute the code that should only be executed when the input is not null.
      */
     public String nullSafeExec(boolean nullable, String isNull, String execute) {
+/*
+    if (nullable) {
+      s"""
+        if (!$isNull) {
+          $execute
+        }
+      """
+    } else {
+      "\n" + execute
+    }
+* */
         if (nullable) {
-            return Block.block(
-                    """
-                            if (!${isNull}) {
-                              ${execute}
-                            }
-                            """,
-                    Map.of("isNull", isNull, "execute", execute)
-            ).toString();
+            return CodeGeneratorUtils.template("\n" + """
+                if (!${isNull}) {
+                  ${execute}
+                }
+            """, Map.of("isNull", isNull, "execute", execute));
         } else {
             return "\n" + execute;
         }

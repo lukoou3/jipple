@@ -25,6 +25,11 @@ public class Multiply extends BinaryArithmetic {
     }
 
     @Override
+    protected String decimalMethod() {
+        return "times";
+    }
+
+    @Override
     protected Object nullSafeEval(Object input1, Object input2) {
         if (multiply == null) {
             DataType dataType = dataType();

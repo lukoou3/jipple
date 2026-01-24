@@ -26,6 +26,11 @@ public class Subtract extends BinaryArithmetic {
     }
 
     @Override
+    protected String decimalMethod() {
+        return "minus";
+    }
+
+    @Override
     protected Object nullSafeEval(Object input1, Object input2) {
         if (minus == null) {
             DataType dataType = dataType();

@@ -24,6 +24,11 @@ public class Add extends BinaryArithmetic {
     }
 
     @Override
+    protected String decimalMethod() {
+        return "plus";
+    }
+
+    @Override
     protected Object nullSafeEval(Object input1, Object input2) {
         if (plus == null) {
             DataType dataType = dataType();

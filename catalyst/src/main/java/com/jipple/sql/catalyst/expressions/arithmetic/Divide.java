@@ -25,6 +25,11 @@ public class Divide extends DivModLike {
     }
 
     @Override
+    protected String decimalMethod() {
+        return "div";
+    }
+
+    @Override
     public Object evalOperation(Object left, Object right) {
         if (div == null) {
             DataType dataType = dataType();

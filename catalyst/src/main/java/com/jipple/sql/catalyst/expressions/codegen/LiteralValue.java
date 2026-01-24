@@ -5,7 +5,7 @@ import java.io.Serializable;
 /**
  * A literal java expression.
  */
-public class LiteralValue implements ExprValue, Serializable {
+public class LiteralValue extends ExprValue implements Serializable {
     private final String value;
     private final Class<?> javaType;
 

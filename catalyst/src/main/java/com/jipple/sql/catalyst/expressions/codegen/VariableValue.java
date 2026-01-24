@@ -3,7 +3,7 @@ package com.jipple.sql.catalyst.expressions.codegen;
 /**
  * A local variable java expression.
  */
-public class VariableValue implements ExprValue {
+public class VariableValue extends ExprValue {
     public final String variableName;
     public final Class<?> javaType;
 

@@ -25,6 +25,11 @@ public class Remainder extends DivModLike {
     }
 
     @Override
+    protected String decimalMethod() {
+        return "remainder";
+    }
+
+    @Override
     public Object evalOperation(Object left, Object right) {
         if (mod == null) {
             DataType dataType = dataType();

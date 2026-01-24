@@ -3,7 +3,7 @@ package com.jipple.sql.catalyst.expressions.codegen;
 /**
  * A java expression fragment.
  */
-public class SimpleExprValue implements ExprValue {
+public class SimpleExprValue extends ExprValue {
     public final String expr;
     public final Class<?> javaType;
 

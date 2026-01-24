@@ -1,5 +1,6 @@
 package com.jipple.sql.types;
 
+import com.jipple.sql.catalyst.trees.SQLQueryContext;
 import com.jipple.unsafe.types.UTF8String;
 
 import java.io.Serializable;
@@ -306,6 +307,12 @@ public final class Decimal implements Comparable<Decimal>, Serializable {
         return changePrecision(precision, scale, RoundingMode.HALF_UP);
     }
 
+    public Decimal toPrecision(int precision, int scale,
+                               RoundingMode roundMode,
+                               boolean nullOnOverflow, SQLQueryContext context) {
+        return toPrecision(precision, scale, roundMode, nullOnOverflow);
+    }
+
     /**
      * 调整为指定精度与 scale。
      */
@@ -514,6 +521,8 @@ public final class Decimal implements Comparable<Decimal>, Serializable {
     }
 
     // ----- 静态成员与工厂方法 -----
+    public static final RoundingMode ROUND_HALF_UP = RoundingMode.HALF_UP;
+    public static final RoundingMode ROUND_FLOOR = RoundingMode.FLOOR;
 
     /** Decimal 支持的最大精度/scale（与 Spark 默认保持一致） */
     public static final int MAX_DECIMAL_PRECISION = 38;

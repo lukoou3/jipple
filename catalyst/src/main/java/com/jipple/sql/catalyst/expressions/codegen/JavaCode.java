@@ -20,7 +20,7 @@ public interface JavaCode {
                 return FalseLiteral.INSTANCE;
             }
         }
-        return new LiteralValue(v, CodeGenerator.javaClass(dataType));
+        return new LiteralValue(v, CodeGeneratorUtils.javaClass(dataType));
     }
 
     /**
@@ -29,15 +29,15 @@ public interface JavaCode {
      */
     static LiteralValue defaultLiteral(DataType dataType) {
         return new LiteralValue(
-            CodeGenerator.defaultValue(dataType, true),
-            CodeGenerator.javaClass(dataType));
+            CodeGeneratorUtils.defaultValue(dataType, true),
+            CodeGeneratorUtils.javaClass(dataType));
     }
 
     /**
      * Create a local java variable.
      */
     static VariableValue variable(String name, DataType dataType) {
-        return variable(name, CodeGenerator.javaClass(dataType));
+        return variable(name, CodeGeneratorUtils.javaClass(dataType));
     }
 
     /**
@@ -58,7 +58,7 @@ public interface JavaCode {
      * Create a global java variable.
      */
     static GlobalValue global(String name, DataType dataType) {
-        return global(name, CodeGenerator.javaClass(dataType));
+        return global(name, CodeGeneratorUtils.javaClass(dataType));
     }
 
     /**
@@ -79,7 +79,7 @@ public interface JavaCode {
      * Create an expression fragment.
      */
     static SimpleExprValue expression(String code, DataType dataType) {
-        return expression(code, CodeGenerator.javaClass(dataType));
+        return expression(code, CodeGeneratorUtils.javaClass(dataType));
     }
 
     /**
@@ -107,14 +107,14 @@ public interface JavaCode {
      * Create an Inline for Java Type name.
      */
     static Inline javaType(DataType dataType) {
-        return new Inline(CodeGenerator.javaType(dataType));
+        return new Inline(CodeGeneratorUtils.javaType(dataType));
     }
 
     /**
      * Create an Inline for boxed Java Type name.
      */
     static Inline boxedType(DataType dataType) {
-        return new Inline(CodeGenerator.boxedType(dataType));
+        return new Inline(CodeGeneratorUtils.boxedType(dataType));
     }
 }
 

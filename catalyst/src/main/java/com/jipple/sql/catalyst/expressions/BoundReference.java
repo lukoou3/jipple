@@ -66,8 +66,7 @@ public class BoundReference extends LeafExpression {
                 return ev.copy(Block.block(
                         """
                                 boolean ${isNull} = ${inputRow}.isNullAt(${ordinal});
-                                ${javaType} ${value} = ${isNull} ?
-                                  ${defaultValue} : (${getValue});
+                                ${javaType} ${value} = ${isNull} ? ${defaultValue} : (${getValue});
                                 """,
                         Map.of(
                                 "isNull", ev.isNull.toString(),

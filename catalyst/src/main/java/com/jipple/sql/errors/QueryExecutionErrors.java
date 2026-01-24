@@ -23,6 +23,13 @@ public class QueryExecutionErrors {
         return  JippleException.internalError("Cannot generate code for expression: " + expression);
     }
 
+    public static JippleRuntimeException notOverrideExpectedMethodsError(String className, String m1, String m2) {
+        return new JippleRuntimeException(
+                "_LEGACY_ERROR_TEMP_2025",
+                Map.of("className", className, "m1", m1, "m2", m2)
+        );
+    }
+
     public static JippleException cannotCastFromNullTypeError(DataType to) {
         return new JippleException(
                 "CANNOT_CAST_DATATYPE",
@@ -43,6 +50,22 @@ public class QueryExecutionErrors {
                 "TOO_MANY_ARRAY_ELEMENTS",
                 Map.of("numElements", String.valueOf(numElements), "size",  String.valueOf(elementSize))
         );
+    }
+
+    public static JippleException divideByZeroError(String errorContext) {
+        String msg = "Division by zero";
+        if (errorContext != null) {
+            msg = msg + ": " + errorContext;
+        }
+        return JippleException.internalError(msg);
+    }
+
+    public static JippleException overflowInIntegralDivideError(String errorContext) {
+        String msg = "Integral divide overflow";
+        if (errorContext != null) {
+            msg = msg + ": " + errorContext;
+        }
+        return JippleException.internalError(msg);
     }
 
 }

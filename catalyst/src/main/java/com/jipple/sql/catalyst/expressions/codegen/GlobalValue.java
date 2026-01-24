@@ -3,7 +3,7 @@ package com.jipple.sql.catalyst.expressions.codegen;
 /**
  * A global variable java expression.
  */
-public class GlobalValue implements ExprValue {
+public class GlobalValue extends ExprValue {
     public final String value;
     public final Class<?> javaType;
 

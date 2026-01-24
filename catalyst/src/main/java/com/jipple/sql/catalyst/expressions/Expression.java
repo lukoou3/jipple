@@ -145,7 +145,7 @@ public abstract class Expression extends TreeNode<Expression> {
         if (eval.code.length() > splitThreshold && ctx.INPUT_ROW != null && ctx.currentVars == null) {
             String setIsNull;
             if (!(eval.isNull instanceof LiteralValue)) {
-                String globalIsNull = ctx.addMutableState(CodeGenerator.JAVA_BOOLEAN, "globalIsNull");
+                String globalIsNull = ctx.addMutableState(CodeGeneratorUtils.JAVA_BOOLEAN, "globalIsNull");
                 ExprValue localIsNull = eval.isNull;
                 eval.isNull = JavaCode.isNullGlobal(globalIsNull);
                 setIsNull = CodeGeneratorUtils.template(
@@ -159,7 +159,7 @@ public abstract class Expression extends TreeNode<Expression> {
                 setIsNull = "";
             }
 
-            String javaType = CodeGenerator.javaType(dataType());
+            String javaType = CodeGeneratorUtils.javaType(dataType());
             String newValue = ctx.freshName("value");
 
             String funcName = ctx.freshName(nodeName());
@@ -207,7 +207,7 @@ public abstract class Expression extends TreeNode<Expression> {
     protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
         // Default implementation: return a simple ExprCode
         // Subclasses should override this method to provide actual code generation
-        return ev;
+        throw new UnsupportedOperationException("This method must be overridden by all concrete expressions");
     }
 
     public boolean resolved() {

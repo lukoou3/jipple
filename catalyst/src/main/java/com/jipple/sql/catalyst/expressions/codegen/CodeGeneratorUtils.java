@@ -211,8 +211,7 @@ public final class CodeGeneratorUtils {
         if (logger.isDebugEnabled()) {
             // Only add extra debugging info to byte code when we are going to print the source code.
             evaluator.setDebuggingInformation(true, true, false);
-            // TODO: Implement CodeFormatter
-            logger.debug("\n{}", code.body);
+            logger.debug("\n{}", CodeFormatter.format(code));
         }
 
         ByteCodeStats codeStats;

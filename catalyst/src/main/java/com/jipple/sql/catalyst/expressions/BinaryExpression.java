@@ -1,9 +1,17 @@
 package com.jipple.sql.catalyst.expressions;
 
 import com.jipple.sql.catalyst.InternalRow;
+import com.jipple.sql.catalyst.expressions.codegen.Block;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.CodeGeneratorUtils;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
+import com.jipple.sql.catalyst.expressions.codegen.FalseLiteral;
 import com.jipple.sql.catalyst.trees.BinaryLike;
+import com.jipple.sql.errors.QueryExecutionErrors;
 
 import java.util.List;
+import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public abstract class BinaryExpression extends Expression implements BinaryLike<Expression> {
@@ -70,7 +78,93 @@ public abstract class BinaryExpression extends Expression implements BinaryLike<
      * of evaluation process, we should override [[eval]].
      */
     protected Object nullSafeEval(Object input1, Object input2) {
-        throw new UnsupportedOperationException("not implements nullSafeEval for: " + this.getClass());
+        throw QueryExecutionErrors.notOverrideExpectedMethodsError("BinaryExpressions",
+                "eval", "nullSafeEval");
+    }
+
+    /**
+     * Short hand for generating binary evaluation code.
+     * If either of the sub-expressions is null, the result of this computation
+     * is assumed to be null.
+     *
+     * @param f accepts two variable names and returns Java code to compute the output.
+     */
+    protected ExprCode defineCodeGen(
+            CodegenContext ctx,
+            ExprCode ev,
+            BiFunction<String, String, String> f) {
+        return nullSafeCodeGen(ctx, ev, (eval1, eval2) ->
+                ev.value + " = " + f.apply(eval1, eval2) + ";");
+    }
+
+    /**
+     * Short hand for generating binary evaluation code.
+     * If either of the sub-expressions is null, the result of this computation
+     * is assumed to be null.
+     *
+     * @param f function that accepts the 2 non-null evaluation result names of children
+     *          and returns Java code to compute the output.
+     */
+    protected ExprCode nullSafeCodeGen(
+            CodegenContext ctx,
+            ExprCode ev,
+            BiFunction<String, String, String> f) {
+        ExprCode leftGen = left.genCode(ctx);
+        ExprCode rightGen = right.genCode(ctx);
+        String resultCode = f.apply(leftGen.value.toString(), rightGen.value.toString());
+
+        if (nullable()) {
+            String nullSafeEval = leftGen.code + ctx.nullSafeExec(
+                    left.nullable(),
+                    leftGen.isNull.toString(),
+                    rightGen.code + ctx.nullSafeExec(
+                            right.nullable(),
+                            rightGen.isNull.toString(),
+                            CodeGeneratorUtils.template("\n" + """
+                                            ${isNull} = false; // resultCode could change nullability.
+                                            ${resultCode}
+                                            """,
+                                    Map.of(
+                                            "isNull", ev.isNull.toString(),
+                                            "resultCode", resultCode
+                                    )
+                            )
+                    )
+            );
+
+            return ev.copy(Block.block(
+                    """
+                            boolean ${isNull} = true;
+                            ${javaType} ${value} = ${defaultValue};
+                            ${nullSafeEval}
+                            """,
+                    Map.of(
+                            "isNull", ev.isNull.toString(),
+                            "javaType", CodeGeneratorUtils.javaType(dataType()),
+                            "value", ev.value.toString(),
+                            "defaultValue", CodeGeneratorUtils.defaultValue(dataType()),
+                            "nullSafeEval", nullSafeEval
+                    )
+            ));
+        } else {
+            return ev.copy(Block.block(
+                            """
+                                    ${leftCode}
+                                    ${rightCode}
+                                    ${javaType} ${value} = ${defaultValue};
+                                    ${resultCode}
+                                    """,
+                            Map.of(
+                                    "leftCode", leftGen.code.toString(),
+                                    "rightCode", rightGen.code.toString(),
+                                    "javaType", CodeGeneratorUtils.javaType(dataType()),
+                                    "value", ev.value.toString(),
+                                    "defaultValue", CodeGeneratorUtils.defaultValue(dataType()),
+                                    "resultCode", resultCode
+                            )
+                    ),
+                    FalseLiteral.INSTANCE);
+        }
     }
 
     @Override

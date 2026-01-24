@@ -23,6 +23,10 @@ public final class CodeFormatter {
         // Utility class, prevent instantiation
     }
 
+    public static String format(CodeAndComment code) {
+        return format(code, -1);
+    }
+
     public static String format(CodeAndComment code, int maxLines) {
         Formatter formatter = new Formatter();
         String[] lines = code.body.split("\n");

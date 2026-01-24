@@ -43,6 +43,11 @@ public class SortOrder extends Expression {
     }
 
     @Override
+    public Object[] args() {
+        return new Object[]{child, direction, nullOrdering, sameOrderExpressions};
+    }
+
+    @Override
     public List<Expression> children() {
         List<Expression> children = new ArrayList<>(1 + sameOrderExpressions.size());
         children.add(child);
@@ -66,6 +71,11 @@ public class SortOrder extends Expression {
     }
 
     @Override
+    public boolean foldable() {
+        return false;
+    }
+
+    @Override
     public String toString() {
         return child + " " + direction.sql() + " " + nullOrdering.sql();
     }
@@ -85,20 +95,6 @@ public class SortOrder extends Expression {
     }
 
     @Override
-    protected Expression withNewChildrenInternal(List<Expression> newChildren) {
-        Expression newChild = newChildren.get(0);
-        List<Expression> newSameOrder = newChildren.size() > 1
-                ? newChildren.subList(1, newChildren.size())
-                : Collections.emptyList();
-        return new SortOrder(newChild, direction, nullOrdering, newSameOrder);
-    }
-
-    @Override
-    public Object[] args() {
-        return new Object[]{child, direction, nullOrdering, sameOrderExpressions};
-    }
-
-    @Override
     public Object eval(InternalRow input) {
         throw QueryExecutionErrors.cannotEvaluateExpressionError(this);
     }
@@ -106,6 +102,13 @@ public class SortOrder extends Expression {
     @Override
     protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
         throw QueryExecutionErrors.cannotGenerateCodeForExpressionError(this);
+    }
+
+    @Override
+    protected Expression withNewChildrenInternal(List<Expression> newChildren) {
+        Expression newChild = newChildren.get(0);
+        List<Expression> newSameOrder = new ArrayList<>(newChildren.subList(1, newChildren.size()));
+        return new SortOrder(newChild, direction, nullOrdering, newSameOrder);
     }
 
     public static SortOrder of(Expression child, SortDirection direction, List<Expression> sameOrderExpressions) {
@@ -118,6 +121,14 @@ public class SortOrder extends Expression {
 
     /**
      * Returns if a sequence of SortOrder satisfies another sequence of SortOrder.
+     *
+     * SortOrder sequence A satisfies SortOrder sequence B if and only if B is an equivalent of A
+     * or of A's prefix. Here are examples of ordering A satisfying ordering B:
+     * <ul>
+     *   <li>ordering A is [x, y] and ordering B is [x]</li>
+     *   <li>ordering A is [x(sameOrderExpressions=x1)] and ordering B is [x1]</li>
+     *   <li>ordering A is [x(sameOrderExpressions=x1), y] and ordering B is [x1]</li>
+     * </ul>
      */
     public static boolean orderingSatisfies(List<SortOrder> ordering1, List<SortOrder> ordering2) {
         if (ordering2.isEmpty()) {

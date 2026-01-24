@@ -24,6 +24,11 @@ public class IntegralDivide extends DivModLike {
     }
 
     @Override
+    protected String decimalMethod() {
+        return "quot";
+    }
+
+    @Override
     public String sqlOperator() {
         return "div";
     }

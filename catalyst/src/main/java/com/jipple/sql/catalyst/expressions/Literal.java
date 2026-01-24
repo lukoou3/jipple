@@ -1,6 +1,10 @@
 package com.jipple.sql.catalyst.expressions;
 
 import com.jipple.sql.catalyst.InternalRow;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.CodeGeneratorUtils;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
+import com.jipple.sql.catalyst.expressions.codegen.JavaCode;
 import com.jipple.sql.types.*;
 import com.jipple.unsafe.types.UTF8String;
 
@@ -34,6 +38,49 @@ public class Literal extends LeafExpression {
     @Override
     public Object eval(InternalRow input) {
         return value;
+    }
+
+    @Override
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        String javaType = CodeGeneratorUtils.javaType(dataType);
+        if (value == null) {
+            return ExprCode.forNullValue(dataType);
+        } else {
+            if (dataType instanceof BooleanType
+                    || dataType instanceof IntegerType
+                    || dataType instanceof DateType) {
+                return ExprCode.forNonNullValue(JavaCode.literal(value.toString(), dataType));
+            } else if (dataType instanceof FloatType) {
+                float v = (Float) value;
+                if (Float.isNaN(v)) {
+                    return ExprCode.forNonNullValue(JavaCode.literal("Float.NaN", dataType));
+                } else if (v == Float.POSITIVE_INFINITY) {
+                    return ExprCode.forNonNullValue(JavaCode.literal("Float.POSITIVE_INFINITY", dataType));
+                } else if (v == Float.NEGATIVE_INFINITY) {
+                    return ExprCode.forNonNullValue(JavaCode.literal("Float.NEGATIVE_INFINITY", dataType));
+                } else {
+                    return ExprCode.forNonNullValue(JavaCode.literal(value + "F", dataType));
+                }
+            } else if (dataType instanceof DoubleType) {
+                double v = (Double) value;
+                if (Double.isNaN(v)) {
+                    return ExprCode.forNonNullValue(JavaCode.literal("Double.NaN", dataType));
+                } else if (v == Double.POSITIVE_INFINITY) {
+                    return ExprCode.forNonNullValue(JavaCode.literal("Double.POSITIVE_INFINITY", dataType));
+                } else if (v == Double.NEGATIVE_INFINITY) {
+                    return ExprCode.forNonNullValue(JavaCode.literal("Double.NEGATIVE_INFINITY", dataType));
+                } else {
+                    return ExprCode.forNonNullValue(JavaCode.literal(value + "D", dataType));
+                }
+            } else if (dataType instanceof TimestampType
+                    || dataType instanceof TimestampNTZType
+                    || dataType instanceof LongType) {
+                return ExprCode.forNonNullValue(JavaCode.literal(value + "L", dataType));
+            } else {
+                String constRef = ctx.addReferenceObj("literal", value, javaType);
+                return ExprCode.forNonNullValue(JavaCode.global(constRef, dataType));
+            }
+        }
     }
 
     @Override
