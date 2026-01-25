@@ -1,5 +1,6 @@
 package com.jipple.sql.catalyst.expressions;
 
+import com.jipple.sql.SQLConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,7 +14,7 @@ public abstract class CodeGeneratorWithInterpretedFallback<IN, OUT> {
 
     // We are allowed to choose codegen-only or no-codegen modes if under tests.
     public OUT createObject(IN in) {
-        return createObject(in, CodegenObjectFactoryMode.NO_CODEGEN);
+        return createObject(in, SQLConf.get().codegenFactoryMode());
     }
 
     public OUT createObject(IN in, CodegenObjectFactoryMode fallbackMode) {

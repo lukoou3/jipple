@@ -19,7 +19,11 @@ import java.util.stream.IntStream;
  */
 public class GenerateSafeProjection  extends CodeGenerator<List<Expression>, Projection> {
     private static final Logger logger = LoggerFactory.getLogger(GenerateSafeProjection.class);
-
+    public static final GenerateSafeProjection INSTANCE = new GenerateSafeProjection();
+    private GenerateSafeProjection() {}
+    public static GenerateSafeProjection get() {
+        return INSTANCE;
+    }
     @Override
     protected List<Expression> canonicalize(List<Expression> in) {
         return in.stream().map(ExpressionCanonicalizer::canonicalize).collect(Collectors.toList());
@@ -41,7 +45,7 @@ public class GenerateSafeProjection  extends CodeGenerator<List<Expression>, Pro
             } else {
                 ExprCode evaluationCode = e.genCode(ctx);
                 return evaluationCode.code +
-                    CodeGeneratorUtils.template("""
+                    CodeGeneratorUtils.template("\n" + """
                       if (${evaluationCodeIsNull}) {
                         mutableRow.setNullAt(${i});
                       } else {
@@ -104,7 +108,7 @@ public class GenerateSafeProjection  extends CodeGenerator<List<Expression>, Pro
         CodeAndComment code = CodeFormatter.stripOverlappingComments(
             new CodeAndComment(codeBody, ctx.getPlaceHolderToComments()));
         if (logger.isDebugEnabled()) {
-            logger.debug("Generated code for '{}':\n{}", expressions.stream().map(Expression::toString).collect(Collectors.joining(",")), CodeFormatter.format(code));
+            logger.debug("Generated code for\n '{}':\n{}", expressions.stream().map(Expression::toString).collect(Collectors.joining(",")), CodeFormatter.format(code));
         }
 
         Tuple2<GeneratedClass, ByteCodeStats> compiled = CodeGeneratorUtils.compile(code);

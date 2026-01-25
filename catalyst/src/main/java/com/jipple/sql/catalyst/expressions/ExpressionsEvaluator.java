@@ -7,9 +7,15 @@ public abstract class ExpressionsEvaluator {
 
     protected final void openExprs(List<Expression> exprs, int partitions, int partitionIndex) throws Exception {
         for (Expression expr : exprs) {
-            if (expr instanceof RichExpression r) {
-                r.open(partitions, partitionIndex);
-            }
+            expr.foreach(e -> {
+                if (e instanceof RichExpression r) {
+                    try {
+                        r.open(partitions, partitionIndex);
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }
+            });
         }
     }
 
@@ -17,9 +23,15 @@ public abstract class ExpressionsEvaluator {
 
     protected final void closeExprs(List<Expression> exprs) throws Exception {
         for (Expression expr : exprs) {
-            if (expr instanceof RichExpression r) {
-                r.close();
-            }
+            expr.foreach(e -> {
+                if (e instanceof RichExpression r) {
+                    try {
+                        r.close();
+                    } catch (Exception ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }
+            });
         }
     }
 

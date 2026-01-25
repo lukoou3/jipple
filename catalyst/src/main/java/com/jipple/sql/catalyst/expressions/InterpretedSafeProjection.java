@@ -47,7 +47,7 @@ public class InterpretedSafeProjection extends Projection {
     }
 
     @Override
-    public Object apply(InternalRow row) {
+    public InternalRow apply(InternalRow row) {
         Tuple2<Expression, InternalRowWriter> exprWithWriter;
         Object v;
         for (int i = 0; i < exprsWithWriters.size(); i++) {

@@ -89,7 +89,7 @@ public abstract class InternalRow implements SpecializedGetters, Serializable {
     }
 
 
-    public static final InternalRow EMPTY = new GenericInternalRow(new Object[0]);
+    public static final InternalRow EMPTY = null;
 
     /**
      * This method can be used to construct a [[InternalRow]] with the given values.

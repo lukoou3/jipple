@@ -1,10 +1,13 @@
 package com.jipple.sql.catalyst.expressions;
 
+import com.jipple.sql.catalyst.CatalystTypeConverters;
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
 import com.jipple.sql.catalyst.expressions.codegen.CodeGeneratorUtils;
 import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
 import com.jipple.sql.catalyst.expressions.codegen.JavaCode;
+import com.jipple.sql.catalyst.types.*;
+import com.jipple.sql.catalyst.util.ArrayData;
 import com.jipple.sql.types.*;
 import com.jipple.unsafe.types.UTF8String;
 
@@ -102,18 +105,26 @@ public class Literal extends LeafExpression {
     private boolean doValidate(Object v, DataType dataType) {
         if (v == null) {
             return true;
-        } else if (dataType instanceof BooleanType) {
-            return v instanceof Boolean;
-        } else if (dataType instanceof IntegerType) {
-            return v instanceof Integer;
-        } else if (dataType instanceof LongType) {
-            return v instanceof Long;
-        } else if (dataType instanceof DoubleType) {
-            return v instanceof Double;
-        } else if (dataType instanceof StringType) {
-            return v instanceof UTF8String;
         }
-
+        PhysicalDataType<?> phyDataType = PhysicalDataType.of(dataType);
+        if (phyDataType instanceof PhysicalBooleanType) {
+            return v instanceof Boolean;
+        } else if (phyDataType instanceof PhysicalIntegerType) {
+            return v instanceof Integer;
+        } else if (phyDataType instanceof PhysicalLongType) {
+            return v instanceof Long;
+        } else if (phyDataType instanceof PhysicalFloatType) {
+            return v instanceof Float;
+        } else if (phyDataType instanceof PhysicalDoubleType) {
+            return v instanceof Double;
+        } else if (phyDataType instanceof PhysicalStringType) {
+            return v instanceof UTF8String;
+        } else if (phyDataType instanceof PhysicalDecimalType) {
+            return v instanceof Decimal;
+        } else if (phyDataType instanceof PhysicalArrayType phyArrayType) {
+            DataType et = phyArrayType.elementType;
+            return v instanceof ArrayData ar && (ar.numElements() == 0 || doValidate(ar.get(0, et), et));
+        }
         return false;
     }
 
@@ -142,6 +153,10 @@ public class Literal extends LeafExpression {
 
     public static Literal of(Object v, DataType dataType) {
         return new Literal(v, dataType);
+    }
+
+    public static Literal create(Object v, DataType dataType) {
+        return new Literal(CatalystTypeConverters.convertToCatalyst(v), dataType);
     }
 
 }

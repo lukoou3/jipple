@@ -4,6 +4,7 @@ import com.jipple.sql.catalyst.expressions.SpecializedGetters;
 import com.jipple.sql.types.DataType;
 
 import java.io.Serializable;
+import java.util.function.IntFunction;
 
 public abstract class ArrayData implements SpecializedGetters, Serializable {
     public abstract int numElements();
@@ -82,18 +83,26 @@ public abstract class ArrayData implements SpecializedGetters, Serializable {
         return values;
     }
 
-    /**
-     * Converts this ArrayData to an Object array using the specified element type.
-     * This is a generic method that works for any DataType.
-     */
-    @SuppressWarnings("unchecked")
-    public <T> T[] toArray(DataType elementType) {
+    public Object[] toArray(DataType elementType) {
         int size = numElements();
         Object[] result = new Object[size];
         for (int i = 0; i < size; i++) {
             result[i] = get(i, elementType);
         }
-        return (T[]) result;
+        return result;
+    }
+
+    /**
+     * Converts this ArrayData to an Object array using the specified element type.
+     * This is a generic method that works for any DataType.
+     */
+    public <T> T[] toArray(DataType elementType, IntFunction<T[]> generator) {
+        int size = numElements();
+        T[] result = generator.apply(size);
+        for (int i = 0; i < size; i++) {
+            result[i] = (T) get(i, elementType);
+        }
+        return result;
     }
 
     /**

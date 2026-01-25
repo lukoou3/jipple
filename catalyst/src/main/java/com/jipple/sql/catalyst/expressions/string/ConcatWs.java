@@ -89,7 +89,7 @@ public class ConcatWs extends Expression {
             } else if (value instanceof UTF8String str) {
                 flatInputs.add(str);
             } else if (value instanceof ArrayData arr) {
-                UTF8String[] values = arr.toArray(StringType.INSTANCE);
+                UTF8String[] values = arr.toArray(StringType.INSTANCE, UTF8String[]::new);
                 for (UTF8String s : values) {
                     flatInputs.add(s);
                 }

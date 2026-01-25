@@ -33,7 +33,7 @@ public class InterpretedProjection extends Projection {
     }
 
     @Override
-    public Object apply(InternalRow input) {
+    public InternalRow apply(InternalRow input) {
         Object[] outputArray = new Object[exprs.size()];
         for (int i = 0; i < outputArray.length; i++) {
             outputArray[i] = exprs.get(i).eval(input);

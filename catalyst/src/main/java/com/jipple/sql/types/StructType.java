@@ -55,6 +55,13 @@ public class StructType extends DataType {
         return _nameToIndex;
     }
 
+    public int length() {
+        return fields.length;
+    }
+
+    public StructField apply(int fieldIndex) {
+        return fields[fieldIndex];
+    }
 
     @Override
     public int defaultSize() {
