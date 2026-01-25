@@ -950,6 +950,10 @@ public class CodegenContext {
         }
     }
 
+    public String splitExpressionsWithCurrentInputs(List<String> expressions) {
+        return splitExpressionsWithCurrentInputs(expressions, "apply", Collections.emptyList());
+    }
+
     public String splitExpressionsWithCurrentInputs(
             List<String> expressions,
             String funcName,

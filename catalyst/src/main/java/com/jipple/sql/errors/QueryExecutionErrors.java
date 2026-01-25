@@ -78,4 +78,7 @@ public class QueryExecutionErrors {
         return JippleException.internalError(msg);
     }
 
+    public static JippleRuntimeException unreachableError(String err){
+        return new JippleRuntimeException("_LEGACY_ERROR_TEMP_2028", Map.of("err", err));
+    }
 }

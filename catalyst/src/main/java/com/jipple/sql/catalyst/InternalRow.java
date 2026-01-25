@@ -2,23 +2,10 @@ package com.jipple.sql.catalyst;
 
 import com.jipple.sql.catalyst.expressions.GenericInternalRow;
 import com.jipple.sql.catalyst.expressions.SpecializedGetters;
-import com.jipple.sql.catalyst.types.PhysicalArrayType;
-import com.jipple.sql.catalyst.types.PhysicalBinaryType;
-import com.jipple.sql.catalyst.types.PhysicalBooleanType;
-import com.jipple.sql.catalyst.types.PhysicalCalendarIntervalType;
-import com.jipple.sql.catalyst.types.PhysicalDataType;
-import com.jipple.sql.catalyst.types.PhysicalDecimalType;
-import com.jipple.sql.catalyst.types.PhysicalDoubleType;
-import com.jipple.sql.catalyst.types.PhysicalFloatType;
-import com.jipple.sql.catalyst.types.PhysicalIntegerType;
-import com.jipple.sql.catalyst.types.PhysicalLongType;
-import com.jipple.sql.catalyst.types.PhysicalMapType;
-import com.jipple.sql.catalyst.types.PhysicalStringType;
-import com.jipple.sql.catalyst.types.PhysicalStructType;
+import com.jipple.sql.catalyst.types.*;
 import com.jipple.sql.catalyst.util.ArrayData;
 import com.jipple.sql.catalyst.util.MapData;
-import com.jipple.sql.types.DataType;
-import com.jipple.sql.types.Decimal;
+import com.jipple.sql.types.*;
 import com.jipple.unsafe.types.CalendarInterval;
 import com.jipple.unsafe.types.UTF8String;
 
@@ -118,7 +105,9 @@ public abstract class InternalRow implements SpecializedGetters, Serializable {
         return new GenericInternalRow(values.toArray());
     }
 
-    /** Returns an empty [[InternalRow]]. */
+    /**
+     * Returns an empty [[InternalRow]].
+     */
     public static InternalRow empty() {
         return EMPTY;
     }
@@ -186,4 +175,63 @@ public abstract class InternalRow implements SpecializedGetters, Serializable {
         return getValueNullSafe;
     }
 
+    public static InternalRowWriter getWriter(int ordinal, DataType dt) {
+        if (dt instanceof BooleanType) {
+            return (input, v) -> input.setBoolean(ordinal, (Boolean) v);
+        } else if (dt instanceof IntegerType || dt instanceof DateType) {
+            return (input, v) -> input.setInt(ordinal, (Integer) v);
+        } else if (dt instanceof LongType || dt instanceof TimestampType || dt instanceof TimestampNTZType) {
+            return (input, v) -> input.setLong(ordinal, (Long) v);
+        } else if (dt instanceof FloatType) {
+            return (input, v) -> input.setFloat(ordinal, (Float) v);
+        } else if (dt instanceof DoubleType) {
+            return (input, v) -> input.setDouble(ordinal, (Double) v);
+        } else if (dt instanceof CalendarIntervalType) {
+            return (input, v) -> input.setInterval(ordinal, (CalendarInterval) v);
+        } else if (dt instanceof DecimalType decimalType) {
+            return (input, v) -> input.setDecimal(ordinal, (Decimal) v, decimalType.precision());
+        } else if (dt instanceof NullType) {
+            return (input, v) -> input.setNullAt(ordinal);
+        } else if (dt instanceof StringType) {
+            return (input, v) -> input.update(ordinal, ((UTF8String) v).copy());
+        } else if (dt instanceof StructType) {
+            return (input, v) -> input.update(ordinal, ((InternalRow) v).copy());
+        } else if (dt instanceof ArrayType) {
+            return (input, v) -> input.update(ordinal, ((ArrayData) v).copy());
+        } else if (dt instanceof MapType) {
+            return (input, v) -> input.update(ordinal, ((MapData) v).copy());
+        } else {
+            return (input, v) -> input.update(ordinal, v);
+        }
+    }
+
+    public static InternalRowWriter getWriterFast(int ordinal, DataType dt) {
+        if (dt instanceof BooleanType) {
+            return (input, v) -> input.setBoolean(ordinal, (Boolean) v);
+        } else if (dt instanceof IntegerType || dt instanceof DateType) {
+            return (input, v) -> input.setInt(ordinal, (Integer) v);
+        } else if (dt instanceof LongType || dt instanceof TimestampType || dt instanceof TimestampNTZType) {
+            return (input, v) -> input.setLong(ordinal, (Long) v);
+        } else if (dt instanceof FloatType) {
+            return (input, v) -> input.setFloat(ordinal, (Float) v);
+        } else if (dt instanceof DoubleType) {
+            return (input, v) -> input.setDouble(ordinal, (Double) v);
+        } else if (dt instanceof CalendarIntervalType) {
+            return (input, v) -> input.setInterval(ordinal, (CalendarInterval) v);
+        } else if (dt instanceof DecimalType decimalType) {
+            return (input, v) -> input.setDecimal(ordinal, (Decimal) v, decimalType.precision());
+        } else if (dt instanceof NullType) {
+            return (input, v) -> input.setNullAt(ordinal);
+        } else if (dt instanceof StringType) {
+            return (input, v) -> input.update(ordinal, (UTF8String) v);
+        } else if (dt instanceof StructType) {
+            return (input, v) -> input.update(ordinal, (InternalRow) v);
+        } else if (dt instanceof ArrayType) {
+            return (input, v) -> input.update(ordinal, (ArrayData) v);
+        } else if (dt instanceof MapType) {
+            return (input, v) -> input.update(ordinal, (MapData) v);
+        } else {
+            return (input, v) -> input.update(ordinal, v);
+        }
+    }
 }

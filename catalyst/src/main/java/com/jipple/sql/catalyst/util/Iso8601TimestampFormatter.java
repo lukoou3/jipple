@@ -29,6 +29,12 @@ public class Iso8601TimestampFormatter implements TimestampFormatter {
         this.formatter = DateTimeFormatter.ofPattern(pattern, locale);
     }
 
+    public Iso8601TimestampFormatter(
+            String pattern,
+            ZoneId zoneId) {
+        this(pattern, zoneId, DEFAULT_LOCALE);
+    }
+
     @Override
     public long parse(String s) throws DateTimeParseException {
         TemporalAccessor parsed = formatter().parse(s);

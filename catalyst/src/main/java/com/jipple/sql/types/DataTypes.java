@@ -31,6 +31,23 @@ public class DataTypes {
         }
     };
 
+    public static final AbstractDataType INTEGRAL = new AbstractDataType() {
+        @Override
+        public DataType defaultConcreteType() {
+            return INTEGER;
+        }
+
+        @Override
+        public boolean acceptsType(DataType other) {
+            return other instanceof IntegralType;
+        }
+
+        @Override
+        public String simpleString() {
+            return "integral";
+        }
+    };
+
     public static final AbstractDataType ANY = new AbstractDataType() {
 
         @Override

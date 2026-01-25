@@ -2,12 +2,18 @@ package com.jipple.sql.catalyst.expressions.datetime;
 
 import com.jipple.collection.Option;
 import com.jipple.sql.catalyst.expressions.Expression;
+import com.jipple.sql.catalyst.expressions.Literal;
+import com.jipple.sql.catalyst.expressions.codegen.CodeGeneratorUtils;
+import com.jipple.sql.catalyst.expressions.codegen.CodegenContext;
+import com.jipple.sql.catalyst.expressions.codegen.ExprCode;
 import com.jipple.sql.catalyst.util.TimestampFormatter;
 import com.jipple.sql.types.AbstractDataType;
 import com.jipple.sql.types.DataType;
 import com.jipple.unsafe.types.UTF8String;
 
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 
 import static com.jipple.sql.catalyst.util.DateTimeConstants.MICROS_PER_SECOND;
 import static com.jipple.sql.types.DataTypes.LONG;
@@ -27,6 +33,10 @@ public class FromUnixTime extends TimestampFormatterHelper {
 
     public FromUnixTime(Expression sec, Expression format) {
         this(sec, format, Option.none());
+    }
+
+    public FromUnixTime(Expression sec) {
+        this(sec, Literal.of(TimestampFormatter.defaultPattern()));
     }
 
     @Override
@@ -78,6 +88,40 @@ public class FromUnixTime extends TimestampFormatterHelper {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    @Override
+    protected ExprCode doGenCode(CodegenContext ctx, ExprCode ev) {
+        Option<TimestampFormatter> formatterOption = formatterOption();
+        if (formatterOption.isDefined()) {
+            String formatterName = ctx.addReferenceObj(
+                    "formatter",
+                    formatterOption.get(),
+                    TimestampFormatter.class.getName()
+            );
+            return defineCodeGen(ctx, ev, (seconds, format) -> CodeGeneratorUtils.template(
+                    "UTF8String.fromString(${formatter}.format(${seconds} * 1000000L))",
+                    Map.ofEntries(
+                            Map.entry("formatter", formatterName),
+                            Map.entry("seconds", seconds)
+                    )
+            ));
+        }
+        String zoneId = ctx.addReferenceObj("zoneId", zoneId(), ZoneId.class.getName());
+        String timestampFormatterClass = TimestampFormatter.class.getName();
+        return defineCodeGen(ctx, ev, (seconds, format) -> CodeGeneratorUtils.template(
+                """
+                        UTF8String.fromString(
+                          ${timestampFormatter}.getFormatter(${format}.toString(), ${zoneId})
+                          .format(${seconds} * 1000000L))
+                        """,
+                Map.ofEntries(
+                        Map.entry("timestampFormatter", timestampFormatterClass),
+                        Map.entry("format", format),
+                        Map.entry("zoneId", zoneId),
+                        Map.entry("seconds", seconds)
+                )
+        ));
     }
 
     @Override

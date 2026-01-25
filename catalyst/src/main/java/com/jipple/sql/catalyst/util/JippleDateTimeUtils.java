@@ -1,9 +1,13 @@
 package com.jipple.sql.catalyst.util;
 
 import com.jipple.collection.Option;
+import com.jipple.sql.errors.QueryExecutionErrors;
 import com.jipple.unsafe.types.UTF8String;
 
 import java.time.*;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.IsoFields;
+import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -16,6 +20,34 @@ import static com.jipple.sql.catalyst.util.DateTimeConstants.*;
 public class JippleDateTimeUtils {
 
     public static final TimeZone TimeZoneUTC = TimeZone.getTimeZone("UTC");
+
+    // The constants are visible for testing purpose only.
+    public static final int TRUNC_INVALID = -1;
+    // The levels from TRUNC_TO_MICROSECOND to TRUNC_TO_DAY are used in truncations
+    // of TIMESTAMP values only.
+    public static final int TRUNC_TO_MICROSECOND = 0;
+    public static final int MIN_LEVEL_OF_TIMESTAMP_TRUNC = TRUNC_TO_MICROSECOND;
+    public static final int TRUNC_TO_MILLISECOND = 1;
+    public static final int TRUNC_TO_SECOND = 2;
+    public static final int TRUNC_TO_MINUTE = 3;
+    public static final int TRUNC_TO_HOUR = 4;
+    public static final int TRUNC_TO_DAY = 5;
+    // The levels from TRUNC_TO_WEEK to TRUNC_TO_YEAR are used in truncations
+    // of DATE and TIMESTAMP values.
+    public static final int TRUNC_TO_WEEK = 6;
+    public static final int MIN_LEVEL_OF_DATE_TRUNC = TRUNC_TO_WEEK;
+    public static final int TRUNC_TO_MONTH = 7;
+    public static final int TRUNC_TO_QUARTER = 8;
+    public static final int TRUNC_TO_YEAR = 9;
+
+    // Thursday = 0 since 1970/Jan/01 => Thursday
+    private static final int SUNDAY = 3;
+    private static final int MONDAY = 4;
+    private static final int TUESDAY = 5;
+    private static final int WEDNESDAY = 6;
+    private static final int THURSDAY = 0;
+    private static final int FRIDAY = 1;
+    private static final int SATURDAY = 2;
 
     // See issue SPARK-35679
     // min second cause overflow in instant to micro
@@ -118,6 +150,154 @@ public class JippleDateTimeUtils {
         // the above calculation of `secs` via `floorDiv`.
         long mos = micros - secs * MICROS_PER_SECOND;
         return Instant.ofEpochSecond(secs, mos * NANOS_PER_MICROS);
+    }
+
+    /**
+     * Returns the trunc date from original date and trunc level.
+     * Trunc level should be generated using `parseTruncLevel()`, should be between 6 and 9.
+     */
+    public static int truncDate(int days, int level) {
+        switch (level) {
+            case TRUNC_TO_WEEK:
+                return getNextDateForDayOfWeek(days - 7, MONDAY);
+            case TRUNC_TO_MONTH:
+                return days - getDayOfMonth(days) + 1;
+            case TRUNC_TO_QUARTER:
+                return localDateToDays(daysToLocalDate(days).with(IsoFields.DAY_OF_QUARTER, 1L));
+            case TRUNC_TO_YEAR:
+                return days - getDayInYear(days) + 1;
+            default:
+                throw QueryExecutionErrors.unreachableError(": Invalid trunc level: " + level);
+        }
+    }
+
+    private static long truncToUnit(long micros, ZoneId zoneId, ChronoUnit unit) {
+        ZonedDateTime truncated = microsToInstant(micros).atZone(zoneId).truncatedTo(unit);
+        return instantToMicros(truncated.toInstant());
+    }
+
+    /**
+     * Returns the trunc date time from original date time and trunc level.
+     * Trunc level should be generated using `parseTruncLevel()`, should be between 0 and 9.
+     */
+    public static long truncTimestamp(long micros, int level, ZoneId zoneId) {
+        // Time zone offsets have a maximum precision of seconds (see `java.time.ZoneOffset`). Hence
+        // truncation to microsecond, millisecond, and second can be done
+        // without using time zone information. This results in a performance improvement.
+        switch (level) {
+            case TRUNC_TO_MICROSECOND:
+                return micros;
+            case TRUNC_TO_MILLISECOND:
+                return micros - Math.floorMod(micros, MICROS_PER_MILLIS);
+            case TRUNC_TO_SECOND:
+                return micros - Math.floorMod(micros, MICROS_PER_SECOND);
+            case TRUNC_TO_MINUTE:
+                return truncToUnit(micros, zoneId, ChronoUnit.MINUTES);
+            case TRUNC_TO_HOUR:
+                return truncToUnit(micros, zoneId, ChronoUnit.HOURS);
+            case TRUNC_TO_DAY:
+                return truncToUnit(micros, zoneId, ChronoUnit.DAYS);
+            default:
+                int dDays = microsToDays(micros, zoneId);
+                return daysToMicros(truncDate(dDays, level), zoneId);
+        }
+    }
+
+    /**
+     * Returns the truncate level, could be from TRUNC_TO_MICROSECOND to TRUNC_TO_YEAR,
+     * or TRUNC_INVALID, TRUNC_INVALID means unsupported truncate level.
+     */
+    public static int parseTruncLevel(UTF8String format) {
+        if (format == null) {
+            return TRUNC_INVALID;
+        }
+        switch (format.toString().toUpperCase(Locale.ROOT)) {
+            case "MICROSECOND":
+                return TRUNC_TO_MICROSECOND;
+            case "MILLISECOND":
+                return TRUNC_TO_MILLISECOND;
+            case "SECOND":
+                return TRUNC_TO_SECOND;
+            case "MINUTE":
+                return TRUNC_TO_MINUTE;
+            case "HOUR":
+                return TRUNC_TO_HOUR;
+            case "DAY":
+            case "DD":
+                return TRUNC_TO_DAY;
+            case "WEEK":
+                return TRUNC_TO_WEEK;
+            case "MON":
+            case "MONTH":
+            case "MM":
+                return TRUNC_TO_MONTH;
+            case "QUARTER":
+                return TRUNC_TO_QUARTER;
+            case "YEAR":
+            case "YYYY":
+            case "YY":
+                return TRUNC_TO_YEAR;
+            default:
+                return TRUNC_INVALID;
+        }
+    }
+
+    /**
+     * Returns day of week from String. Starting from Thursday, marked as 0.
+     * (Because 1970-01-01 is Thursday).
+     *
+     * @throws IllegalArgumentException if the input is not a valid day of week.
+     */
+    public static int getDayOfWeekFromString(UTF8String string) {
+        String dowString = string.toString().toUpperCase(Locale.ROOT);
+        switch (dowString) {
+            case "SU":
+            case "SUN":
+            case "SUNDAY":
+                return SUNDAY;
+            case "MO":
+            case "MON":
+            case "MONDAY":
+                return MONDAY;
+            case "TU":
+            case "TUE":
+            case "TUESDAY":
+                return TUESDAY;
+            case "WE":
+            case "WED":
+            case "WEDNESDAY":
+                return WEDNESDAY;
+            case "TH":
+            case "THU":
+            case "THURSDAY":
+                return THURSDAY;
+            case "FR":
+            case "FRI":
+            case "FRIDAY":
+                return FRIDAY;
+            case "SA":
+            case "SAT":
+            case "SATURDAY":
+                return SATURDAY;
+            default:
+                throw new IllegalArgumentException("Illegal input for day of week: " + string);
+        }
+    }
+
+    /**
+     * Returns the first date which is later than startDate and is of the given dayOfWeek.
+     * dayOfWeek is an integer ranges in [0, 6], and 0 is Thu, 1 is Fri, etc,.
+     */
+    public static int getNextDateForDayOfWeek(int startDay, int dayOfWeek) {
+        return startDay + 1 + Math.floorMod(dayOfWeek - 1 - startDay, 7);
+    }
+
+    private static int getDayOfMonth(int days) {
+        return daysToLocalDate(days).getDayOfMonth();
+    }
+
+    private static int getDayInYear(int days) {
+        return daysToLocalDate(days).getDayOfYear();
     }
 
     /**

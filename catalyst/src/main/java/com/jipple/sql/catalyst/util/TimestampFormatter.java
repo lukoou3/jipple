@@ -93,4 +93,12 @@ public interface TimestampFormatter extends Serializable {
             return new DefaultTimestampFormatter(zoneId, locale);
         }
     }
+
+    static TimestampFormatter getFormatter(String format, ZoneId zoneId) {
+        return getFormatter(format, zoneId, DEFAULT_LOCALE);
+    }
+
+    static TimestampFormatter getFormatter(String format, ZoneId zoneId, Locale locale) {
+        return new Iso8601TimestampFormatter(format, zoneId, locale);
+    }
 }

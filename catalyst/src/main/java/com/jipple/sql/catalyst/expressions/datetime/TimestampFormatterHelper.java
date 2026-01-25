@@ -27,7 +27,8 @@ public abstract class TimestampFormatterHelper extends BinaryExpression implemen
     }
 
     protected final TimestampFormatter getFormatter(String fmt) {
-        return TimestampFormatter.getFormatter(Option.some(fmt), zoneId());
+        //return TimestampFormatter.getFormatter(Option.some(fmt), zoneId());
+        return TimestampFormatter.getFormatter(fmt, zoneId());
     }
 
 }
