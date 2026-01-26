@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 public class Like extends StringRegexExpression {
-    private final char escapeChar;
+    public final char escapeChar;
 
     public Like(Expression left, Expression right) {
         this(left, right, '\\');

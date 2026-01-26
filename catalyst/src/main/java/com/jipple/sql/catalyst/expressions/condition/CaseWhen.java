@@ -6,6 +6,7 @@ import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
 import com.jipple.sql.catalyst.analysis.rule.typecoerce.TypeCoercion;
 import com.jipple.sql.catalyst.expressions.ComplexTypeMergingExpression;
+import com.jipple.sql.catalyst.expressions.ConditionalExpression;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.expressions.Literal;
 import com.jipple.sql.catalyst.expressions.codegen.Block;
@@ -23,7 +24,7 @@ import java.util.stream.Collectors;
 
 import static com.jipple.sql.types.DataTypes.BOOLEAN;
 
-public class CaseWhen extends ComplexTypeMergingExpression {
+public class CaseWhen extends ComplexTypeMergingExpression implements ConditionalExpression {
     public final List<Tuple2<Expression, Expression>> branches;
     public final Option<Expression> elseValue;
 
@@ -69,6 +70,11 @@ public class CaseWhen extends ComplexTypeMergingExpression {
     @Override
     public boolean nullable() {
         return branches.stream().anyMatch(x -> x._2.nullable()) || elseValue.map(x -> x.nullable()).getOrElse(true);
+    }
+
+    @Override
+    public boolean foldable() {
+        return ConditionalExpression.conditionalFoldable(this);
     }
 
     @Override

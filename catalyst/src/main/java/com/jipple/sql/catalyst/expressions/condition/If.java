@@ -4,6 +4,7 @@ import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
 import com.jipple.sql.catalyst.analysis.rule.typecoerce.TypeCoercion;
 import com.jipple.sql.catalyst.expressions.ComplexTypeMergingExpression;
+import com.jipple.sql.catalyst.expressions.ConditionalExpression;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.expressions.codegen.Block;
 import com.jipple.sql.catalyst.expressions.codegen.CodeGeneratorUtils;
@@ -16,7 +17,7 @@ import java.util.Map;
 
 import static com.jipple.sql.types.DataTypes.BOOLEAN;
 
-public class If extends ComplexTypeMergingExpression {
+public class If extends ComplexTypeMergingExpression implements ConditionalExpression {
     public final Expression predicate;
     public final Expression trueValue;
     public final Expression falseValue;
@@ -45,6 +46,11 @@ public class If extends ComplexTypeMergingExpression {
     @Override
     public boolean nullable() {
         return trueValue.nullable() || falseValue.nullable();
+    }
+
+    @Override
+    public boolean foldable() {
+        return ConditionalExpression.conditionalFoldable(this);
     }
 
     @Override

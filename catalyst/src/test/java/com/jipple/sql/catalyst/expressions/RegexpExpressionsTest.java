@@ -218,9 +218,110 @@ public class RegexpExpressionsTest extends ExpressionEvalHelper {
         GenerateSafeProjection.get().generate(List.of(new RegExpExtract(Literal.of("\"quote"), Literal.of("\"quote"), Literal.of(1))));
     }
 
+    @Test
+    public void testRegexExtractAll() {
+        InternalRow row1 = createRow("100-200,300-400,500-600", "(\\d+)-(\\d+)", 0);
+        InternalRow row2 = createRow("100-200,300-400,500-600", "(\\d+)-(\\d+)", 1);
+        InternalRow row3 = createRow("100-200,300-400,500-600", "(\\d+)-(\\d+)", 2);
+        InternalRow row4 = createRow("100-200,300-400,500-600", "(\\d+).*", 1);
+        InternalRow row5 = createRow("100-200,300-400,500-600", "([a-z])", 1);
+        InternalRow row6 = createRow(null, "([a-z])", 1);
+        InternalRow row7 = createRow("100-200,300-400,500-600", null, 1);
+        InternalRow row8 = createRow("100-200,300-400,500-600", "([a-z])", null);
 
-    /*
+        BoundReference s = new BoundReference(0, STRING);
+        BoundReference p = new BoundReference(1, STRING);
+        BoundReference r = new BoundReference(2, INTEGER);
 
-    */
+        Expression expr = new RegExpExtractAll(s, p, r);
+        checkEvaluation(expr, Arrays.asList("100-200", "300-400", "500-600"), row1);
+        checkEvaluation(expr, Arrays.asList("100", "300", "500"), row2);
+        checkEvaluation(expr, Arrays.asList("200", "400", "600"), row3);
+        checkEvaluation(expr, Arrays.asList("100"), row4);
+        checkEvaluation(expr, new ArrayList<>(), row5);
+        checkEvaluation(expr, null, row6);
+        checkEvaluation(expr, null, row7);
+        checkEvaluation(expr, null, row8);
+
+        Expression expr1 = new RegExpExtractAll(s, p);
+        checkEvaluation(expr1, Arrays.asList("100", "300", "500"), row2);
+
+        Expression nonNullExpr = new RegExpExtractAll(
+                Literal.of("100-200,300-400,500-600"),
+                Literal.of("(\\d+)-(\\d+)"),
+                Literal.of(1));
+        checkEvaluation(nonNullExpr, Arrays.asList("100", "300", "500"), row2);
+    }
+
+    @Test
+    public void testRegExpInStr() {
+        Expression expr = new RegExpInStr(new BoundReference(0, STRING), new BoundReference(1, STRING));
+        checkEvaluation(expr, 1, createRow("100-200", "(\\d+)-(\\d+)"));
+        checkEvaluation(expr, 1, createRow("100-200", "(\\d+).*"));
+        // will not match anything, empty string get
+        checkEvaluation(expr, 0, createRow("100-200", "([a-z])"));
+        checkEvaluation(expr, null, createRow(null, "([a-z])"));
+        checkEvaluation(expr, null, createRow("100-200", null));
+
+        // Test escaping of arguments
+        GenerateSafeProjection.get().generate(List.of(new RegExpInStr(Literal.of("\"quote"), Literal.of("\"quote"))));
+    }
+
+    @Test
+    public void testStringSplit() {
+        BoundReference s1 = new BoundReference(0, STRING);
+        BoundReference s2 = new BoundReference(1, STRING);
+        InternalRow row1 = createRow("aa2bb3cc", "[1-9]+");
+        InternalRow row2 = createRow(null, "[1-9]+");
+        InternalRow row3 = createRow("aa2bb3cc", null);
+
+        checkEvaluation(
+                new StringSplit(Literal.of("aa2bb3cc"), Literal.of("[1-9]+"), Literal.of(-1)),
+                Arrays.asList("aa", "bb", "cc"), row1);
+        checkEvaluation(
+                new StringSplit(Literal.of("aa2bb3cc"), Literal.of("[1-9]+"), Literal.of(2)),
+                Arrays.asList("aa", "bb3cc"), row1);
+        // limit = 0 should behave just like limit = -1
+        checkEvaluation(
+                new StringSplit(Literal.of("aacbbcddc"), Literal.of("c"), Literal.of(0)),
+                Arrays.asList("aa", "bb", "dd", ""), row1);
+        checkEvaluation(
+                new StringSplit(Literal.of("aacbbcddc"), Literal.of("c"), Literal.of(-1)),
+                Arrays.asList("aa", "bb", "dd", ""), row1);
+        checkEvaluation(
+                new StringSplit(s1, s2, Literal.of(-1)),
+                Arrays.asList("aa", "bb", "cc"), row1);
+        checkEvaluation(
+                new StringSplit(s1, s2, Literal.of(-1)), null, row2);
+        checkEvaluation(
+                new StringSplit(s1, s2, Literal.of(-1)), null, row3);
+
+        // Empty regex
+        checkEvaluation(
+                new StringSplit(Literal.of("hello"), Literal.of(""), Literal.of(0)),
+                Arrays.asList("h", "e", "l", "l", "o"), row1);
+        checkEvaluation(
+                new StringSplit(Literal.of("hello"), Literal.of(""), Literal.of(-1)),
+                Arrays.asList("h", "e", "l", "l", "o"), row1);
+        checkEvaluation(
+                new StringSplit(Literal.of("hello"), Literal.of(""), Literal.of(5)),
+                Arrays.asList("h", "e", "l", "l", "o"), row1);
+        checkEvaluation(
+                new StringSplit(Literal.of("hello"), Literal.of(""), Literal.of(3)),
+                Arrays.asList("h", "e", "llo"), row1);
+        checkEvaluation(
+                new StringSplit(Literal.of("hello"), Literal.of(""), Literal.of(100)),
+                Arrays.asList("h", "e", "l", "l", "o"), row1);
+        checkEvaluation(
+                new StringSplit(Literal.of(""), Literal.of(""), Literal.of(-1)),
+                Arrays.asList(""), row1);
+        checkEvaluation(
+                new StringSplit(Literal.of(""), Literal.of(""), Literal.of(0)),
+                Arrays.asList(""), row1);
+
+        // Test escaping of arguments
+        GenerateSafeProjection.get().generate(List.of(
+                new StringSplit(Literal.of("\"quote"), Literal.of("\"quote"), Literal.of(-1))));
+    }
 
 }

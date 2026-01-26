@@ -1,4 +1,4 @@
-package com.jipple.sql.catalyst.expressions.string;
+package com.jipple.sql.catalyst.expressions.regexp;
 
 import com.jipple.collection.Option;
 import com.jipple.sql.catalyst.expressions.Expression;

@@ -3,6 +3,7 @@ package com.jipple.sql.catalyst.expressions.nvl;
 import com.jipple.sql.catalyst.InternalRow;
 import com.jipple.sql.catalyst.analysis.TypeCheckResult;
 import com.jipple.sql.catalyst.expressions.ComplexTypeMergingExpression;
+import com.jipple.sql.catalyst.expressions.ConditionalExpression;
 import com.jipple.sql.catalyst.expressions.Expression;
 import com.jipple.sql.catalyst.expressions.codegen.Block;
 import com.jipple.sql.catalyst.expressions.codegen.CodeGeneratorUtils;
@@ -15,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class Coalesce extends ComplexTypeMergingExpression {
+public class Coalesce extends ComplexTypeMergingExpression implements ConditionalExpression {
     private final List<Expression> children;
     public Coalesce(List<Expression> children) {
         this.children = children;
@@ -38,7 +39,7 @@ public class Coalesce extends ComplexTypeMergingExpression {
 
     @Override
     public boolean foldable() {
-        return children.stream().allMatch(Expression::foldable);
+        return ConditionalExpression.conditionalFoldable(this);
     }
 
     @Override
