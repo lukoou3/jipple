@@ -29,6 +29,11 @@ public class Literal extends LeafExpression {
     }
 
     @Override
+    public boolean foldable() {
+        return true;
+    }
+
+    @Override
     public boolean nullable() {
         return value == null;
     }

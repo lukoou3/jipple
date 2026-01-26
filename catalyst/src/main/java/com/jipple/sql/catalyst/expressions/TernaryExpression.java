@@ -121,15 +121,9 @@ public abstract class TernaryExpression extends Expression implements TernaryLik
         String resultCode = f.apply(leftGen.value.toString(), midGen.value.toString(), rightGen.value.toString());
 
         if (nullable()) {
-            String nullSafeEval = leftGen.code + ctx.nullSafeExec(
-                    children().get(0).nullable(),
-                    leftGen.isNull.toString(),
-                    midGen.code + ctx.nullSafeExec(
-                            children().get(1).nullable(),
-                            midGen.isNull.toString(),
-                            rightGen.code + ctx.nullSafeExec(
-                                    children().get(2).nullable(),
-                                    rightGen.isNull.toString(),
+            String nullSafeEval = leftGen.code + ctx.nullSafeExec(children().get(0).nullable(), leftGen.isNull.toString(),
+                    midGen.code + ctx.nullSafeExec(children().get(1).nullable(), midGen.isNull.toString(),
+                            rightGen.code + ctx.nullSafeExec(children().get(2).nullable(), rightGen.isNull.toString(),
                                     CodeGeneratorUtils.template(
                                             """
                                                     ${isNull} = false; // resultCode could change nullability.
@@ -177,8 +171,7 @@ public abstract class TernaryExpression extends Expression implements TernaryLik
                                     "resultCode", resultCode
                             )
                     ),
-                    FalseLiteral.INSTANCE,
-                    ev.value);
+                    FalseLiteral.INSTANCE);
         }
     }
 

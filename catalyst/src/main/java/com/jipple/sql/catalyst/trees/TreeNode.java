@@ -233,7 +233,7 @@ public abstract class TreeNode<BaseType extends TreeNode<BaseType>> implements W
         }
 
         for (int i = 0; i < args.length; i++) {
-            if (Objects.equals(args[i], otherArgs[i])) {
+            if (!Objects.equals(args[i], otherArgs[i])) {
                 return false;
             }
         }

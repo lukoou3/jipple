@@ -81,4 +81,15 @@ public class QueryExecutionErrors {
     public static JippleRuntimeException unreachableError(String err){
         return new JippleRuntimeException("_LEGACY_ERROR_TEMP_2028", Map.of("err", err));
     }
+
+    public static JippleRuntimeException invalidPatternError(String funcName, String pattern, Throwable cause){
+        return new JippleRuntimeException("INVALID_PARAMETER_VALUE.PATTERN",
+                Map.of(
+                        "parameter", "regexp",
+                        "functionName", funcName,
+                        "value", pattern
+                ),
+                cause
+                );
+    }
 }

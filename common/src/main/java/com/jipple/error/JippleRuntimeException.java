@@ -22,6 +22,10 @@ public class JippleRuntimeException extends RuntimeException implements JippleTh
         this.context = context != null ? context : new QueryContext[0];
     }
 
+    public JippleRuntimeException(String errorClass, Map<String, String> messageParameters, Throwable cause) {
+        this(errorClass, messageParameters, cause, new QueryContext[0], "");
+    }
+
     public JippleRuntimeException(String errorClass, Map<String, String> messageParameters) {
         this(errorClass, messageParameters, null, new QueryContext[0], "");
     }
